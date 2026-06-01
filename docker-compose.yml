@@ -1,0 +1,51 @@
+version: "3.9"
+
+services:
+  # ─── Databases ───────────────────────────────────────────────
+  postgres-auth:
+    image: postgres:16-alpine
+    container_name: totan-postgres-auth
+    environment:
+      POSTGRES_USER: totan
+      POSTGRES_PASSWORD: totan_secret
+      POSTGRES_DB: totan_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata-auth:/var/lib/postgresql/data
+    networks:
+      - totan-net
+
+  postgres-patient:
+    image: postgres:16-alpine
+    container_name: totan-postgres-patient
+    environment:
+      POSTGRES_USER: totan
+      POSTGRES_PASSWORD: totan_secret
+      POSTGRES_DB: totan_patient
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata-patient:/var/lib/postgresql/data
+    networks:
+      - totan-net
+
+  # ─── Cache / Message Queue ────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: totan-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - totan-net
+
+volumes:
+  pgdata-auth:
+  pgdata-patient:
+  redisdata:
+
+networks:
+  totan-net:
+    driver: bridge
