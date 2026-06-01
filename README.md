@@ -7,23 +7,25 @@
 
 ## โปรเจคนี้ทำอะไร?
 
-แพทย์อัปโหลดภาพ X-ray มือของเด็ก → AI วิเคราะห์อายุกระดูก → แพทย์เขียน recommendation → ผู้ปกครองดูผลได้ผ่านแอป
+แพทย์อัปโหลดภาพ X-ray มือของเด็ก → AI วิเคราะห์อายุกระดูก → แพทย์เขียน recommendation → ผู้ปกครองดูผลได้ผ่านแอป → ระบบส่งแจ้งเตือนและสร้าง PDF รายงานให้อัตโนมัติ
 
 ---
 
 ## โครงสร้างโปรเจค
 
-โปรเจคนี้แบ่งออกเป็น **5 ส่วน (Services)** แต่ละส่วนทำงานเป็นอิสระจากกัน เหมือนแผนกต่างๆ ในโรงพยาบาล
+โปรเจคนี้แบ่งออกเป็น **7 ส่วน (Services)** แต่ละส่วนทำงานเป็นอิสระจากกัน เหมือนแผนกต่างๆ ในโรงพยาบาล
 
 ```
 totan-nsc2026/
 │
 ├── apps/
-│   ├── web/               🖥️  หน้าเว็บที่ผู้ใช้เห็น (Next.js)
+│   ├── web/               🖥️  หน้าเว็บที่ผู้ใช้เห็น (Next.js 14)
 │   ├── gateway/           🚪  ประตูหน้าบ้าน รับทุก request แล้วส่งต่อ (NestJS)
 │   ├── auth-service/      🔐  จัดการ login / logout / สิทธิ์การเข้าถึง (NestJS)
 │   ├── patient-service/   👶  เก็บข้อมูลเด็ก การประเมิน recommendation (NestJS)
-│   └── ai-service/        🧠  วิเคราะห์ภาพ X-ray ด้วย AI (Python / FastAPI)
+│   ├── ai-service/        🧠  วิเคราะห์ภาพ X-ray ด้วย AI (Python / FastAPI)
+│   ├── report-service/    📄  สร้าง PDF รายงานผลการประเมิน (NestJS)
+│   └── notify-service/    🔔  ส่ง Email และ Push Notification (NestJS)
 │
 ├── packages/
 │   └── shared-types/      📦  TypeScript types ที่ทุก service ใช้ร่วมกัน
@@ -42,6 +44,21 @@ totan-nsc2026/
 | `auth-service` | 3001 | จัดการ user, login, JWT token |
 | `patient-service` | 3002 | ข้อมูลผู้ป่วย, การประเมิน, recommendation |
 | `ai-service` | 8000 | รับภาพ X-ray แล้วส่งผลวิเคราะห์กลับมา |
+| `report-service` | 3003 | รับ event แล้วสร้าง PDF รายงาน |
+| `notify-service` | 3004 | รับ event แล้วส่ง Email / Push Notification |
+
+### services ทำงานร่วมกันยังไง? (Redis Pub/Sub)
+
+`patient-service` จะยิง event ผ่าน Redis เมื่อมีสิ่งสำคัญเกิดขึ้น — `report-service` และ `notify-service` รับ event แล้วทำงานต่ออัตโนมัติ:
+
+```
+assessment.completed  →  report-service สร้าง PDF
+                      →  notify-service แจ้งเตือนแพทย์และผู้ปกครอง
+
+recommendation.sent   →  notify-service แจ้งเตือนผู้ปกครองว่ามีคำแนะนำใหม่
+
+followup.due          →  notify-service แจ้งเตือนว่าถึงกำหนดติดตามผล
+```
 
 ---
 
@@ -102,9 +119,11 @@ pnpm docker:up
 ```bash
 cp apps/auth-service/.env.example    apps/auth-service/.env
 cp apps/patient-service/.env.example apps/patient-service/.env
+cp apps/ai-service/.env.example      apps/ai-service/.env
+cp apps/report-service/.env.example  apps/report-service/.env
+cp apps/notify-service/.env.example  apps/notify-service/.env
 cp apps/gateway/.env.example         apps/gateway/.env
 cp apps/web/.env.example             apps/web/.env
-cp apps/ai-service/.env.example      apps/ai-service/.env
 ```
 
 ---
@@ -115,15 +134,13 @@ cp apps/ai-service/.env.example      apps/ai-service/.env
 
 **Terminal 1 — Auth Service**
 ```bash
-cd apps/auth-service
-pnpm run start:dev
+cd apps/auth-service && pnpm run start:dev
 # จะเห็น: 🔐 Auth Service running on port 3001
 ```
 
 **Terminal 2 — Patient Service**
 ```bash
-cd apps/patient-service
-pnpm run start:dev
+cd apps/patient-service && pnpm run start:dev
 # จะเห็น: 👶 Patient Service running on port 3002
 ```
 
@@ -137,17 +154,27 @@ python -m uvicorn app.main:app --reload
 # จะเห็น: Uvicorn running on http://0.0.0.0:8000
 ```
 
-**Terminal 4 — API Gateway**
+**Terminal 4 — Report Service**
 ```bash
-cd apps/gateway
-pnpm run start:dev
+cd apps/report-service && pnpm run start:dev
+# จะเห็น: 📄 Report Service running on port 3003
+```
+
+**Terminal 5 — Notify Service**
+```bash
+cd apps/notify-service && pnpm run start:dev
+# จะเห็น: 🔔 Notify Service running on port 3004
+```
+
+**Terminal 6 — API Gateway**
+```bash
+cd apps/gateway && pnpm run start:dev
 # จะเห็น: 🚪 API Gateway running on port 3000
 ```
 
-**Terminal 5 — Frontend (Next.js)**
+**Terminal 7 — Frontend (Next.js)**
 ```bash
-cd apps/web
-pnpm run dev
+cd apps/web && pnpm run dev
 # จะเห็น: ▲ Next.js ready on http://localhost:3100
 ```
 
@@ -160,7 +187,7 @@ pnpm run dev
 | คน | รับผิดชอบ | Service |
 |----|-----------|---------|
 | Person A | หน้าเว็บ + ประตูกลาง | `web` + `gateway` |
-| Person B | ระบบ user + ข้อมูลผู้ป่วย | `auth-service` + `patient-service` |
+| Person B | ระบบ user + ข้อมูลผู้ป่วย + PDF + แจ้งเตือน | `auth-service` + `patient-service` + `report-service` + `notify-service` |
 | Person C | AI วิเคราะห์ X-ray | `ai-service` |
 
 ---
@@ -178,6 +205,6 @@ pnpm install        # install packages ใหม่ทุก service
 
 ## มีปัญหา?
 
-- **port ชนกัน** — ตรวจสอบว่ามีโปรแกรมอื่นใช้ port 3000-3002, 8000, 3100 อยู่มั้ย
+- **port ชนกัน** — ตรวจสอบว่ามีโปรแกรมอื่นใช้ port 3000-3004, 8000, 3100 อยู่มั้ย
 - **docker ไม่ขึ้น** — ตรวจสอบว่าเปิด Docker Desktop อยู่มั้ย
 - **pnpm install error** — ลอง `pnpm install --frozen-lockfile` หรือลบ `node_modules` แล้ว install ใหม่
