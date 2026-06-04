@@ -1,412 +1,681 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useTheme } from "@/lib/theme";
+import { useI18n } from "@/lib/i18n";
+import { NavSkeleton, HeroSkeleton, FeaturesSkeleton } from "@/components/Skeleton";
 
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface Session { name: string; role: string }
+
+// ── Hooks ──────────────────────────────────────────────────────────────────────
+/** Reveal-on-scroll: add `.reveal` to an element, it animates in when seen. */
+function useReveal(ready = true) {
+  useEffect(() => {
+    if (!ready) return;
+    const els = document.querySelectorAll<HTMLElement>(".reveal");
+    const obs = new IntersectionObserver(
+      (entries) => entries.forEach((e) => {
+        if (e.isIntersecting) { e.target.classList.add("shown"); obs.unobserve(e.target); }
+      }),
+      { threshold: 0.14 }
+    );
+    els.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, [ready]);
+}
+
+/** Count-up number animation, triggered when element enters view. */
+function useCountUp(target: number, duration = 1400) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    const node = ref.current; if (!node) return;
+    let raf = 0; let started = false;
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && !started) {
+        started = true;
+        const t0 = performance.now();
+        const tick = (t: number) => {
+          const p = Math.min((t - t0) / duration, 1);
+          const eased = 1 - Math.pow(1 - p, 3);
+          setVal(Math.round(eased * target));
+          if (p < 1) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      }
+    }, { threshold: 0.5 });
+    obs.observe(node);
+    return () => { obs.disconnect(); cancelAnimationFrame(raf); };
+  }, [target, duration]);
+  return { ref, val };
+}
+
+// ── Root ───────────────────────────────────────────────────────────────────────
 export default function Home() {
+  const { theme, toggle: toggleTheme } = useTheme();
+  const { lang, toggle: toggleLang } = useI18n();
+  const [scrolled, setScrolled] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [mounted, setMounted] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useReveal(mounted);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    const els = document.querySelectorAll(".reveal");
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("animate-fade-up");
-            (entry.target as HTMLElement).style.opacity = "1";
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.15 }
-    );
-    els.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
+    if (videoRef.current) videoRef.current.playbackRate = 0.75;
   }, []);
+
+  useEffect(() => {
+    const fn = () => setScrolled(window.scrollY > 40);
+    window.addEventListener("scroll", fn, { passive: true });
+    return () => window.removeEventListener("scroll", fn);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem("token");
+      const stored = localStorage.getItem("user");
+      if (token && stored) {
+        const u = JSON.parse(stored);
+        setSession({ name: u.email ?? "", role: u.role ?? "" });
+      }
+    } catch {}
+  }, []);
+
+  // Mouse parallax on hero glow layers
+  useEffect(() => {
+    const el = heroRef.current; if (!el) return;
+    const onMove = (e: MouseEvent) => {
+      const r = el.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - 0.5;
+      const y = (e.clientY - r.top) / r.height - 0.5;
+      el.style.setProperty("--mx", `${x * 26}px`);
+      el.style.setProperty("--my", `${y * 26}px`);
+    };
+    el.addEventListener("mousemove", onMove);
+    return () => el.removeEventListener("mousemove", onMove);
+  }, []);
+
+  const th = lang === "th";
+
+  if (!mounted) return (
+    <div className="min-h-screen bg-[#04293f] overflow-x-hidden">
+      <NavSkeleton />
+      <HeroSkeleton />
+      <FeaturesSkeleton />
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-bg overflow-x-hidden">
-      {/* Navbar */}
-      <nav className="fixed top-0 inset-x-0 z-50 flex items-center justify-between px-8 py-5 bg-bg/80 backdrop-blur-md border-b border-border">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl font-display font-semibold text-primary tracking-tight">
+
+      {/* ── Navbar ──────────────────────────────────────────────────────── */}
+      <header
+        role="banner"
+        className={`fixed top-0 inset-x-0 z-50 flex items-center justify-between px-5 md:px-8 h-16 transition-all duration-500 ${
+          scrolled ? "glass-strong rounded-b-2xl" : "bg-transparent border-b border-white/10"
+        }`}
+      >
+        <Link href="/" className="flex items-center gap-2.5 group" aria-label="โตทัน หน้าแรก">
+          <LogoMark scrolled={scrolled} />
+          <span className={`font-display font-bold text-lg tracking-tight transition-colors ${scrolled ? "text-ink" : "text-white"}`}>
             โตทัน
           </span>
-          <span className="text-xs font-body font-medium text-muted bg-primary-light text-primary px-2 py-0.5 rounded-full">
+          <span className={`hidden sm:inline text-[10px] font-display font-bold tracking-[0.18em] uppercase px-2 py-0.5 rounded-full transition-all ${
+            scrolled ? "bg-primary/12 text-primary" : "bg-white/15 text-white/85"
+          }`}>
             NSC 2026
           </span>
-        </div>
-        <div className="hidden md:flex items-center gap-8 text-sm font-body font-medium text-muted">
-          <a href="#features" className="hover:text-ink transition-colors">ฟีเจอร์</a>
-          <a href="#how" className="hover:text-ink transition-colors">วิธีใช้งาน</a>
-          <a href="#about" className="hover:text-ink transition-colors">เกี่ยวกับ</a>
-        </div>
-        <button className="bg-primary hover:bg-primary-dark text-white text-sm font-body font-medium px-5 py-2.5 rounded-full transition-all duration-200 hover:shadow-lg hover:shadow-primary/20 active:scale-95">
-          เริ่มใช้งาน
-        </button>
-      </nav>
+        </Link>
 
-      {/* Hero */}
-      <section ref={heroRef} className="relative min-h-screen flex items-center pt-20">
-        {/* Background decorative blobs */}
-        <div className="absolute top-1/4 right-0 w-[600px] h-[600px] bg-primary-light rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/3 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-accent-light rounded-full blur-3xl opacity-50 translate-y-1/2 -translate-x-1/4 pointer-events-none" />
+        <nav aria-label="Primary navigation" className="hidden md:flex items-center gap-1">
+          {[
+            { label: th ? "วิธีใช้งาน" : "How It Works", href: "#how" },
+            { label: th ? "สำหรับใคร"  : "Who It's For",  href: "#who" },
+            { label: th ? "เกี่ยวกับ"  : "About",          href: "#about" },
+          ].map(n => (
+            <a key={n.href} href={n.href}
+              className={`px-4 py-2 rounded-lg text-sm font-body font-medium transition-all ${
+                scrolled ? "text-muted hover:text-ink hover:bg-ink/5" : "text-white/75 hover:text-white hover:bg-white/10"
+              }`}>
+              {n.label}
+            </a>
+          ))}
+        </nav>
 
-        <div className="relative w-full max-w-7xl mx-auto px-8 grid md:grid-cols-2 gap-12 items-center py-20">
-          {/* Left — Text */}
-          <div className="space-y-8">
-            <div
-              className="reveal opacity-0"
-              style={{ animationFillMode: "forwards" }}
-            >
-              <span className="inline-flex items-center gap-2 text-xs font-body font-semibold tracking-widest uppercase text-accent bg-accent-light px-4 py-2 rounded-full">
-                <span className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse-slow" />
-                AI-Powered Bone Age Assessment
+        <div className="flex items-center gap-2">
+          <button onClick={toggleLang} aria-label="Toggle language"
+            className={`h-8 px-2.5 rounded-lg text-xs font-display font-semibold transition-all ${
+              scrolled ? "border border-border text-muted hover:text-ink hover:border-primary/40" : "border border-white/25 text-white/80 hover:text-white hover:border-white/50"
+            }`}>
+            {th ? "EN" : "ไทย"}
+          </button>
+          <button onClick={toggleTheme} aria-label="Toggle theme"
+            className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${
+              scrolled ? "border border-border text-muted hover:text-ink" : "border border-white/25 text-white/80 hover:text-white"
+            }`}>
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+          <Link href={session ? "/dashboard" : "/login"}
+            className={`group relative overflow-hidden h-8 px-4 flex items-center gap-1.5 rounded-lg text-sm font-body font-semibold transition-all active:scale-95 ${
+              scrolled
+                ? "text-white shadow-lg shadow-primary/25"
+                : "bg-white text-primary-dark hover:bg-white/90"
+            }`}
+            style={scrolled ? { background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" } : undefined}>
+            <span className="shine relative z-10">{session ? "Dashboard" : (th ? "เริ่มใช้งาน" : "Get Started")}</span>
+          </Link>
+        </div>
+      </header>
+
+      <main>
+        {/* ── Hero ────────────────────────────────────────────────────────── */}
+        <section
+          ref={heroRef}
+          aria-labelledby="hero-heading"
+          className="relative min-h-screen flex flex-col items-center justify-center px-6 text-center overflow-hidden"
+          style={{ background: "linear-gradient(165deg, #04293f 0%, #075985 35%, #0EA5E9 75%, #38BDF8 100%)" }}
+        >
+          {/* Video background */}
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            loop
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ zIndex: 0, willChange: "transform", filter: "blur(0px)" }}
+          >
+            <source src="/LandPageVid1.mp4" type="video/mp4" />
+          </video>
+          {/* Dark overlay to ensure readability */}
+          <div className="absolute inset-0" style={{ background: "linear-gradient(165deg, rgba(2,20,35,0.95) 0%, rgba(4,55,90,0.92) 35%, rgba(10,110,160,0.82) 75%, rgba(30,140,190,0.75) 100%)", zIndex: 1 }} />
+          <AuroraField />
+
+          {/* Floating particles */}
+          <Particles />
+
+          <div className="relative z-10 max-w-4xl mx-auto space-y-8 pt-24 pb-20">
+            {/* Badge */}
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-body font-semibold text-white/90 animate-fade-up"
+              style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(10px)" }}>
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
               </span>
+              AI-Powered · Greulich &amp; Pyle Standard
             </div>
 
-            <div
-              className="reveal opacity-0 animate-delay-100"
-              style={{ animationFillMode: "forwards" }}
-            >
-              <h1 className="font-display text-6xl md:text-7xl lg:text-8xl font-semibold text-ink leading-[1.05] tracking-tight">
-                โตทัน
-                <br />
-                <span className="text-primary">ประเมิน</span>
-                <br />
-                <span className="text-accent">อายุกระดูก</span>
-              </h1>
+            {/* Heading */}
+            <h1 id="hero-heading"
+              className="font-display font-bold text-white leading-[1.05] animate-fade-up animate-delay-100"
+              style={{ fontSize: "clamp(2.75rem, 7vw, 5.5rem)", textWrap: "balance", letterSpacing: "-0.03em" }}>
+              {th ? (
+                <>ประเมินอายุกระดูก<br />
+                <span className="text-gradient" style={{ filter: "brightness(1.25)" }}>ด้วย AI</span>{" "}
+                สำหรับเด็กไทย</>
+              ) : (
+                <>Bone Age Assessment<br />
+                <span className="text-gradient" style={{ filter: "brightness(1.25)" }}>Powered by AI</span>{" "}
+                for Thai Children</>
+              )}
+            </h1>
+
+            <p className="font-body text-white/75 mx-auto animate-fade-up animate-delay-200"
+              style={{ fontSize: "clamp(1rem, 2vw, 1.2rem)", maxWidth: "52ch", lineHeight: 1.7 }}>
+              {th
+                ? "แพทย์อัปโหลด X-ray มือซ้าย AI วิเคราะห์ตามมาตรฐาน Greulich & Pyle ส่งผลและ recommendation ถึงผู้ปกครองได้ใน 2 นาที"
+                : "Upload a left-hand X-ray. AI analyzes against the Greulich & Pyle atlas. Send results and a recommendation to parents within 2 minutes."}
+            </p>
+
+            {/* CTA */}
+            <div className="flex flex-wrap items-center justify-center gap-3 animate-fade-up animate-delay-300">
+              <Link href={session ? "/dashboard" : "/login"}
+                className="group relative inline-flex items-center gap-2.5 font-body font-semibold text-white px-8 py-4 rounded-2xl transition-all hover:-translate-y-0.5 active:scale-[0.97] overflow-hidden"
+                style={{ background: "linear-gradient(120deg,#EA6C49,#F59E0B)", boxShadow: "0 10px 30px rgba(234,108,73,0.45)", fontSize: "1rem" }}>
+                <span className="shine relative z-10 flex items-center gap-2.5">
+                  {session ? (th ? "กลับสู่ Dashboard" : "Back to Dashboard") : (th ? "เริ่มใช้งานฟรี" : "Start for Free")}
+                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                </span>
+              </Link>
+              <a href="#how"
+                className="inline-flex items-center gap-2 font-body font-medium text-white/85 hover:text-white text-sm transition-colors px-4 py-4 rounded-xl hover:bg-white/10">
+                {th ? "ดูวิธีการทำงาน" : "See how it works"}
+                <span className="opacity-70 animate-bounce">↓</span>
+              </a>
             </div>
 
-            <div
-              className="reveal opacity-0 animate-delay-200"
-              style={{ animationFillMode: "forwards" }}
-            >
-              <p className="font-body text-lg text-muted leading-relaxed max-w-md">
-                ระบบวิเคราะห์ภาพ X-ray ด้วย AI เพื่อประเมินอายุกระดูก
-                และติดตามการเจริญเติบโตของเด็กไทย
-                อย่างแม่นยำและรวดเร็ว
+            {/* Live X-ray → AI → Result diagram */}
+            <div className="relative mx-auto animate-fade-up animate-delay-500" style={{ maxWidth: 620 }}>
+              <FlowDiagram lang={lang} />
+            </div>
+          </div>
+
+          {/* Scroll cue */}
+          <div className="absolute bottom-7 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+            <div className="w-5 h-8 rounded-full border-2 border-white/30 flex justify-center pt-1.5">
+              <div className="w-1 h-1.5 rounded-full bg-white/70 animate-bounce" />
+            </div>
+          </div>
+
+          {/* Bottom wave */}
+          <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 120" fill="none" preserveAspectRatio="none" style={{ height: 70, zIndex: 10 }}>
+            <path d="M0 60 C 360 130, 1080 -10, 1440 60 L1440 120 L0 120 Z" fill="rgb(var(--bg))" />
+          </svg>
+        </section>
+
+        {/* ── Proof strip (marquee) ───────────────────────────────────────── */}
+        <section aria-label="Key metrics" className="bg-bg border-b border-border overflow-hidden">
+          <div className="max-w-5xl mx-auto px-6 py-9 grid grid-cols-2 md:grid-cols-4 gap-6">
+            <StatBlock value={95} suffix="%+" label={th ? "ความแม่นยำ" : "Accuracy"} />
+            <StatBlock value={30} prefix="<" suffix="s" label={th ? "เวลาวิเคราะห์" : "Analysis time"} />
+            <StaticStat value="G&P" label={th ? "มาตรฐาน Atlas" : "Atlas Standard"} />
+            <StaticStat value="RBAC" label={th ? "แยกสิทธิ์" : "Role-based access"} />
+          </div>
+        </section>
+
+        {/* ── How it works ────────────────────────────────────────────────── */}
+        <section id="how" aria-labelledby="how-heading" className="relative py-28 px-6 bg-bg overflow-hidden">
+          {/* soft aurora behind */}
+          <div className="absolute top-1/3 -left-40 w-[480px] h-[480px] rounded-full blur-[130px] opacity-20 animate-aurora-slow pointer-events-none"
+            style={{ background: "rgb(var(--aurora-1))" }} />
+          <div className="absolute bottom-0 -right-40 w-[480px] h-[480px] rounded-full blur-[130px] opacity-20 animate-aurora pointer-events-none"
+            style={{ background: "rgb(var(--aurora-3))" }} />
+
+          <div className="relative max-w-6xl mx-auto">
+            <div className="reveal mb-16">
+              <span className="inline-block text-xs font-display font-bold tracking-[0.2em] uppercase text-primary mb-3">
+                {th ? "ขั้นตอน" : "Process"}
+              </span>
+              <h2 id="how-heading" className="font-display font-bold text-ink"
+                style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)", letterSpacing: "-0.025em", textWrap: "balance" }}>
+                {th ? "3 ขั้นตอน จาก X-ray สู่คำแนะนำ" : "3 Steps, X-ray to Recommendation"}
+              </h2>
+              <p className="font-body text-muted mt-3" style={{ fontSize: "1.0625rem", lineHeight: 1.7, maxWidth: "52ch" }}>
+                {th
+                  ? "กระบวนการที่ออกแบบให้สั้นที่สุด เพื่อให้แพทย์มีเวลาสำหรับผู้ป่วย ไม่ใช่สำหรับซอฟต์แวร์"
+                  : "A process designed to be as short as possible, so doctors spend time with patients, not software."}
               </p>
             </div>
 
-            <div
-              className="reveal opacity-0 animate-delay-300 flex flex-wrap gap-4"
-              style={{ animationFillMode: "forwards" }}
-            >
-              <button className="group bg-primary hover:bg-primary-dark text-white font-body font-medium px-8 py-4 rounded-2xl transition-all duration-200 hover:shadow-xl hover:shadow-primary/25 active:scale-95 flex items-center gap-2">
-                เริ่มประเมินทันที
-                <svg
-                  className="w-4 h-4 group-hover:translate-x-1 transition-transform"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-              </button>
-              <button className="font-body font-medium px-8 py-4 rounded-2xl border border-border hover:border-primary hover:text-primary text-muted transition-all duration-200">
-                ดูตัวอย่าง
-              </button>
-            </div>
-
-            <div
-              className="reveal opacity-0 animate-delay-400 flex items-center gap-6 pt-2"
-              style={{ animationFillMode: "forwards" }}
-            >
-              {[
-                { value: "95%+", label: "ความแม่นยำ" },
-                { value: "<30s", label: "เวลาวิเคราะห์" },
-                { value: "ฟรี", label: "สำหรับแพทย์" },
-              ].map((stat) => (
-                <div key={stat.label} className="text-center">
-                  <div className="font-display text-2xl font-semibold text-ink">{stat.value}</div>
-                  <div className="font-body text-xs text-muted mt-0.5">{stat.label}</div>
+            <div className="grid md:grid-cols-3 gap-5">
+              {(th ? [
+                { n: "01", title: "อัปโหลด X-ray มือซ้าย",    body: "รองรับ JPEG, PNG และ DICOM ระบุข้อมูลพื้นฐาน อายุ เพศ และน้ำหนักส่วนสูงของเด็ก",           icon: <XrayIcon /> },
+                { n: "02", title: "AI วิเคราะห์อัตโนมัติ",    body: "Deep learning เปรียบเทียบกับ Greulich & Pyle atlas ให้ bone age, confidence score และ risk flag", icon: <ChipIcon /> },
+                { n: "03", title: "ส่ง recommendation",        body: "แพทย์ตรวจสอบผล เขียนคำแนะนำ ระบบสร้าง PDF และแจ้งเตือนผู้ปกครองอัตโนมัติ",                 icon: <ReportIcon /> },
+              ] : [
+                { n: "01", title: "Upload the X-ray",          body: "Supports JPEG, PNG, and DICOM. Add basic patient data: age, sex, height, and weight.",            icon: <XrayIcon /> },
+                { n: "02", title: "AI analyzes automatically", body: "Deep learning compares against the Greulich & Pyle atlas. Returns bone age, confidence, risk flag.", icon: <ChipIcon /> },
+                { n: "03", title: "Send the recommendation",   body: "Doctor reviews the result, writes a note. System generates a PDF and notifies the parent.",        icon: <ReportIcon /> },
+              ]).map((step, i) => (
+                <div key={step.n}
+                  className="reveal group relative glass rounded-2xl p-8 flex flex-col gap-5 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-primary/10 overflow-hidden"
+                  style={{ transitionDelay: `${i * 90}ms` }}>
+                  <div className="absolute -top-8 -right-6 font-display font-bold text-7xl text-primary/[0.07] select-none group-hover:text-primary/[0.12] transition-colors">
+                    {step.n}
+                  </div>
+                  <div className="relative w-12 h-12 rounded-2xl flex items-center justify-center text-white transition-transform group-hover:scale-110 group-hover:rotate-3"
+                    style={{ background: "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" }}>
+                    {step.icon}
+                  </div>
+                  <div className="relative">
+                    <h3 className="font-display font-semibold text-ink" style={{ fontSize: "1.15rem", letterSpacing: "-0.01em" }}>
+                      {step.title}
+                    </h3>
+                    <p className="font-body text-muted mt-2" style={{ fontSize: "0.9375rem", lineHeight: 1.65 }}>
+                      {step.body}
+                    </p>
+                  </div>
                 </div>
               ))}
             </div>
           </div>
+        </section>
 
-          {/* Right — Visual */}
-          <div
-            className="reveal opacity-0 animate-delay-200 flex justify-center"
-            style={{ animationFillMode: "forwards" }}
-          >
-            <div className="relative w-full max-w-md">
-              {/* Main card */}
-              <div className="animate-float bg-white rounded-3xl shadow-2xl shadow-primary/10 p-8 border border-border">
-                {/* X-ray mockup */}
-                <div className="bg-ink rounded-2xl aspect-[4/3] flex items-center justify-center mb-6 relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-slate-800 to-slate-950" />
-                  {/* Stylized hand X-ray SVG */}
-                  <svg
-                    viewBox="0 0 200 180"
-                    className="relative z-10 w-40 h-36 opacity-80"
-                    fill="none"
-                  >
-                    {/* Palm */}
-                    <rect x="70" y="90" width="60" height="70" rx="8" fill="#CBD5E1" opacity="0.6" />
-                    {/* Fingers */}
-                    <rect x="72" y="50" width="12" height="45" rx="6" fill="#CBD5E1" opacity="0.7" />
-                    <rect x="88" y="38" width="12" height="57" rx="6" fill="#CBD5E1" opacity="0.75" />
-                    <rect x="104" y="42" width="12" height="53" rx="6" fill="#CBD5E1" opacity="0.7" />
-                    <rect x="120" y="52" width="10" height="43" rx="5" fill="#CBD5E1" opacity="0.65" />
-                    {/* Thumb */}
-                    <rect x="52" y="70" width="10" height="38" rx="5" fill="#CBD5E1" opacity="0.6" transform="rotate(-15 57 89)" />
-                    {/* Wrist */}
-                    <rect x="68" y="155" width="64" height="18" rx="6" fill="#94A3B8" opacity="0.4" />
-                    {/* Joints highlight */}
-                    <circle cx="78" cy="56" r="4" fill="#E2E8F0" opacity="0.5" />
-                    <circle cx="94" cy="44" r="4" fill="#E2E8F0" opacity="0.5" />
-                    <circle cx="110" cy="48" r="4" fill="#E2E8F0" opacity="0.5" />
-                    <circle cx="125" cy="58" r="3.5" fill="#E2E8F0" opacity="0.5" />
-                  </svg>
-                  {/* Scan line animation */}
-                  <div
-                    className="absolute inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-accent to-transparent opacity-80"
-                    style={{
-                      animation: "scanLine 3s ease-in-out infinite",
-                      top: "40%",
-                    }}
-                  />
-                  <style>{`
-                    @keyframes scanLine {
-                      0%, 100% { top: 20%; opacity: 0; }
-                      10% { opacity: 0.8; }
-                      50% { top: 80%; opacity: 0.8; }
-                      90% { opacity: 0; }
-                    }
-                  `}</style>
-                </div>
+        {/* ── Who it's for ────────────────────────────────────────────────── */}
+        <section id="who" aria-labelledby="who-heading" className="relative py-28 px-6 overflow-hidden"
+          style={{ background: "#070d1a" }}>
+          <div className="absolute inset-0 opacity-[0.06] pointer-events-none"
+            style={{ backgroundImage: "radial-gradient(circle, #38BDF8 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
+          <div className="absolute top-0 left-1/4 w-[520px] h-[520px] rounded-full blur-[140px] opacity-25 animate-aurora pointer-events-none"
+            style={{ background: "#0EA5E9" }} />
+          <div className="absolute bottom-0 right-1/4 w-[460px] h-[460px] rounded-full blur-[140px] opacity-20 animate-aurora-slow pointer-events-none"
+            style={{ background: "#EA6C49" }} />
 
-                {/* Result */}
-                <div className="flex items-start justify-between">
+          <div className="relative max-w-6xl mx-auto">
+            <h2 id="who-heading" className="reveal font-display font-bold text-white mb-12"
+              style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)", letterSpacing: "-0.025em", textWrap: "balance" }}>
+              {th ? "สองมุมมอง ระบบเดียว" : "Two Perspectives, One System"}
+            </h2>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Doctor */}
+              <div className="reveal group rounded-2xl p-8 flex flex-col gap-6 transition-all duration-300 hover:-translate-y-1 overflow-hidden relative"
+                style={{ background: "rgba(14,165,233,0.10)", border: "1px solid rgba(56,189,248,0.22)", backdropFilter: "blur(14px)" }}>
+                <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl opacity-30 transition-opacity group-hover:opacity-50"
+                  style={{ background: "#38BDF8" }} />
+                <div className="relative flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "rgba(56,189,248,0.22)" }}>
+                    <DoctorIcon className="w-6 h-6 text-[#7dd3fc]" />
+                  </div>
                   <div>
-                    <p className="font-body text-xs text-muted uppercase tracking-wider mb-1">ผลการวิเคราะห์</p>
-                    <p className="font-display text-3xl font-semibold text-ink">8 ปี 4 เดือน</p>
-                    <p className="font-body text-sm text-muted mt-1">อายุกระดูก (Bone Age)</p>
-                  </div>
-                  <div className="bg-green-50 text-green-700 text-xs font-body font-semibold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                    ปกติ
+                    <p className="font-display font-semibold text-white text-base">{th ? "แพทย์เด็ก" : "Pediatrician"}</p>
+                    <p className="font-body text-xs" style={{ color: "rgba(125,211,252,0.75)" }}>{th ? "บทบาทหลัก" : "Primary user"}</p>
                   </div>
                 </div>
+                <ul className="relative space-y-3">
+                  {(th ? [
+                    "อัปโหลด X-ray และดูผล AI ในหน้าเดียวกัน",
+                    "จัดการรายชื่อผู้ป่วยและประวัติการประเมิน",
+                    "เขียน recommendation ส่งตรงถึงผู้ปกครอง",
+                    "Export PDF รายงานสำหรับแฟ้มผู้ป่วย",
+                  ] : [
+                    "Upload X-ray and view AI result on one screen",
+                    "Manage patient list and assessment history",
+                    "Write recommendations sent directly to parents",
+                    "Export PDF reports for patient records",
+                  ]).map((item, i) => (
+                    <li key={i} className="flex items-start gap-2.5 font-body text-white/80" style={{ fontSize: "0.9375rem" }}>
+                      <CheckIcon className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#7dd3fc]" />{item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
 
-                {/* Progress bar */}
-                <div className="mt-4">
-                  <div className="flex justify-between text-xs font-body text-muted mb-2">
-                    <span>พัฒนาการ</span>
-                    <span>92%</span>
+              {/* Parent */}
+              <div className="reveal group rounded-2xl p-8 flex flex-col gap-6 transition-all duration-300 hover:-translate-y-1 overflow-hidden relative"
+                style={{ background: "rgba(234,108,73,0.10)", border: "1px solid rgba(251,146,60,0.22)", backdropFilter: "blur(14px)", transitionDelay: "90ms" }}>
+                <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl opacity-30 transition-opacity group-hover:opacity-50"
+                  style={{ background: "#FB923C" }} />
+                <div className="relative flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "rgba(251,146,60,0.22)" }}>
+                    <ParentIcon className="w-6 h-6" style={{ color: "#FDBA74" }} />
                   </div>
-                  <div className="h-1.5 bg-border rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-primary to-accent rounded-full"
-                      style={{ width: "92%", transition: "width 1.5s ease" }}
-                    />
+                  <div>
+                    <p className="font-display font-semibold text-white text-base">{th ? "ผู้ปกครอง" : "Parent"}</p>
+                    <p className="font-body text-xs" style={{ color: "rgba(253,186,116,0.75)" }}>{th ? "ผู้รับผลการประเมิน" : "Result recipient"}</p>
                   </div>
                 </div>
-              </div>
-
-              {/* Floating badges */}
-              <div className="absolute -top-4 -right-4 bg-accent text-white text-xs font-body font-semibold px-4 py-2 rounded-2xl shadow-lg shadow-accent/30 flex items-center gap-2">
-                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l-3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clipRule="evenodd" />
-                </svg>
-                Greulich &amp; Pyle
-              </div>
-              <div className="absolute -bottom-4 -left-4 bg-white border border-border text-ink text-xs font-body font-medium px-4 py-2 rounded-2xl shadow-lg flex items-center gap-2">
-                <svg className="w-3.5 h-3.5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1 1 .3 2.7-1.1 2.7H3.9c-1.4 0-2.1-1.7-1.1-2.7L4 15.3" />
-                </svg>
-                AI Confidence 97%
+                <ul className="relative space-y-3">
+                  {(th ? [
+                    "รับแจ้งเตือนทันทีเมื่อมีผลการประเมินใหม่",
+                    "ดูผลการเจริญเติบโตของบุตรหลานในรูปแบบที่เข้าใจง่าย",
+                    "อ่าน recommendation จากแพทย์ได้ทุกที่",
+                    "ไม่ต้องสับสนกับคำศัพท์ทางการแพทย์",
+                  ] : [
+                    "Receive instant notifications when a new result is ready",
+                    "View your child's growth in an easy-to-understand format",
+                    "Read doctor recommendations from anywhere",
+                    "No confusing medical jargon",
+                  ]).map((item, i) => (
+                    <li key={i} className="flex items-start gap-2.5 font-body text-white/80" style={{ fontSize: "0.9375rem" }}>
+                      <CheckIcon className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#FDBA74" }} />{item}
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Features */}
-      <section id="features" className="py-24 px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="reveal opacity-0 text-center mb-16" style={{ animationFillMode: "forwards" }}>
-            <span className="font-body text-xs font-semibold tracking-widest uppercase text-accent">ความสามารถ</span>
-            <h2 className="font-display text-5xl font-semibold text-ink mt-3">
-              ครบทุกความต้องการ<br />
-              <span className="text-primary">ในระบบเดียว</span>
+        {/* ── CTA close ───────────────────────────────────────────────────── */}
+        <section id="about" aria-labelledby="cta-heading" className="relative py-32 px-6 overflow-hidden"
+          style={{ background: "linear-gradient(160deg, #0284C7 0%, #0EA5E9 55%, #38BDF8 100%)" }}>
+          <AuroraField subtle />
+          <div className="relative z-10 max-w-3xl mx-auto text-center space-y-8">
+            <h2 id="cta-heading" className="reveal font-display font-bold text-white"
+              style={{ fontSize: "clamp(2rem, 5vw, 3.75rem)", letterSpacing: "-0.03em", textWrap: "balance", lineHeight: 1.1 }}>
+              {th ? "พร้อมเริ่มประเมินอายุกระดูก?" : "Ready to start assessing bone age?"}
             </h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-                  </svg>
-                ),
-                title: "AI วิเคราะห์ X-ray",
-                desc: "ประเมินอายุกระดูกจากภาพ X-ray มือด้วย Deep Learning แม่นยำตามมาตรฐาน Greulich & Pyle",
-                color: "text-primary bg-primary-light",
-                delay: "animate-delay-100",
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-                  </svg>
-                ),
-                title: "ติดตามการเจริญเติบโต",
-                desc: "กราฟพัฒนาการแบบ interactive เปรียบเทียบกับ percentile มาตรฐานสำหรับเด็กไทย",
-                color: "text-accent bg-accent-light",
-                delay: "animate-delay-200",
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-                  </svg>
-                ),
-                title: "จัดการข้อมูลผู้ป่วย",
-                desc: "ระบบ RBAC แยกสิทธิ์แพทย์และผู้ปกครอง ข้อมูลปลอดภัยและเป็นส่วนตัว",
-                color: "text-primary bg-primary-light",
-                delay: "animate-delay-300",
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25z" />
-                  </svg>
-                ),
-                title: "รายงานอัตโนมัติ",
-                desc: "ออก PDF รายงานผลการประเมินพร้อม visualization ส่งต่อแพทย์ได้ทันที",
-                color: "text-accent bg-accent-light",
-                delay: "animate-delay-400",
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
-                  </svg>
-                ),
-                title: "การแจ้งเตือนอัจฉริยะ",
-                desc: "แจ้งเตือนอัตโนมัติเมื่อถึงเวลานัดติดตามผล ผ่าน Line หรือ Email",
-                color: "text-primary bg-primary-light",
-                delay: "animate-delay-500",
-              },
-              {
-                icon: (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5" />
-                  </svg>
-                ),
-                title: "รองรับทุกอุปกรณ์",
-                desc: "Responsive design ใช้งานได้บน Desktop, Tablet และ Mobile อย่างลื่นไหล",
-                color: "text-accent bg-accent-light",
-                delay: "animate-delay-600",
-              },
-            ].map((feature) => (
-              <div
-                key={feature.title}
-                className={`reveal opacity-0 ${feature.delay} group bg-white rounded-3xl p-7 border border-border hover:border-primary/30 hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 cursor-default`}
-                style={{ animationFillMode: "forwards" }}
-              >
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center mb-5 ${feature.color} group-hover:scale-110 transition-transform duration-300`}>
-                  {feature.icon}
-                </div>
-                <h3 className="font-display text-xl font-semibold text-ink mb-2">{feature.title}</h3>
-                <p className="font-body text-sm text-muted leading-relaxed">{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* How it works */}
-      <section id="how" className="py-24 px-8 bg-ink">
-        <div className="max-w-7xl mx-auto">
-          <div className="reveal opacity-0 text-center mb-16" style={{ animationFillMode: "forwards" }}>
-            <span className="font-body text-xs font-semibold tracking-widest uppercase text-accent">ขั้นตอน</span>
-            <h2 className="font-display text-5xl font-semibold text-white mt-3">
-              ใช้งานง่าย <span className="text-accent">3 ขั้นตอน</span>
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8 relative">
-            {/* Connector line */}
-            <div className="hidden md:block absolute top-10 left-[calc(16.666%-1px)] right-[calc(16.666%-1px)] h-px bg-gradient-to-r from-primary/30 via-accent/50 to-primary/30" />
-
-            {[
-              {
-                step: "01",
-                title: "อัปโหลด X-ray",
-                desc: "นำภาพ X-ray มือซ้ายของเด็กอัปโหลดเข้าระบบ รองรับ JPEG, PNG และ DICOM",
-                delay: "animate-delay-100",
-              },
-              {
-                step: "02",
-                title: "AI วิเคราะห์",
-                desc: "ระบบ AI ประมวลผลภาพโดยอัตโนมัติ เปรียบเทียบกับ atlas มาตรฐาน Greulich & Pyle",
-                delay: "animate-delay-300",
-              },
-              {
-                step: "03",
-                title: "รับผลรายงาน",
-                desc: "ดูผลการประเมินอายุกระดูก พร้อม confidence score และดาวน์โหลด PDF ได้ทันที",
-                delay: "animate-delay-500",
-              },
-            ].map((item, i) => (
-              <div
-                key={item.step}
-                className={`reveal opacity-0 ${item.delay} relative`}
-                style={{ animationFillMode: "forwards" }}
-              >
-                <div className="bg-white/5 hover:bg-white/10 border border-white/10 hover:border-accent/30 rounded-3xl p-8 transition-all duration-300">
-                  <div className="w-10 h-10 bg-accent/20 text-accent font-display text-sm font-semibold rounded-2xl flex items-center justify-center mb-6">
-                    {item.step}
-                  </div>
-                  <h3 className="font-display text-2xl font-semibold text-white mb-3">{item.title}</h3>
-                  <p className="font-body text-sm text-white/50 leading-relaxed">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section id="about" className="py-24 px-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <div className="reveal opacity-0 bg-gradient-to-br from-primary-light to-accent-light rounded-3xl p-16 border border-border relative overflow-hidden" style={{ animationFillMode: "forwards" }}>
-            <div className="absolute top-0 right-0 w-64 h-64 bg-primary-light rounded-full blur-3xl opacity-60 -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-            <div className="relative z-10">
-              <span className="font-body text-xs font-semibold tracking-widest uppercase text-accent">พร้อมแล้วหรือยัง?</span>
-              <h2 className="font-display text-5xl font-semibold text-ink mt-3 mb-5">
-                เริ่มดูแลเด็กไทย<br />
-                <span className="text-primary">ให้โตทันวัย</span>
-              </h2>
-              <p className="font-body text-muted leading-relaxed mb-8 max-w-md mx-auto">
-                ระบบ AI ที่ออกแบบมาเพื่อแพทย์เด็กไทยโดยเฉพาะ
-                ใช้งานง่าย แม่นยำ และปลอดภัย
-              </p>
-              <button className="bg-primary hover:bg-primary-dark text-white font-body font-medium px-10 py-4 rounded-2xl transition-all duration-200 hover:shadow-xl hover:shadow-primary/30 active:scale-95">
-                ทดลองใช้งานฟรี
-              </button>
+            <p className="reveal font-body text-white/75 mx-auto" style={{ fontSize: "1.0625rem", lineHeight: 1.7, maxWidth: "44ch" }}>
+              {th
+                ? "ระบบใช้งานฟรีสำหรับแพทย์ ลงทะเบียนได้ทันทีโดยไม่ต้องรอการอนุมัติ"
+                : "Free for doctors. Sign up immediately with no approval wait."}
+            </p>
+            <div className="reveal flex flex-wrap items-center justify-center gap-4">
+              <Link href={session ? "/dashboard" : "/login"}
+                className="group relative inline-flex items-center gap-2.5 font-body font-semibold text-primary-dark bg-white px-10 py-5 rounded-2xl transition-all hover:-translate-y-0.5 active:scale-[0.97] text-lg overflow-hidden"
+                style={{ boxShadow: "0 12px 40px rgba(0,0,0,0.22)" }}>
+                <span className="shine relative z-10 flex items-center gap-2.5">
+                  {session ? (th ? "กลับสู่ Dashboard" : "Back to Dashboard") : (th ? "สมัครใช้งานฟรี" : "Sign Up Free")}
+                  <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+                </span>
+              </Link>
+              {session && (
+                <p className="font-body text-sm text-white/60">
+                  {th ? `เข้าสู่ระบบเป็น ${session.name}` : `Signed in as ${session.name}`}
+                </p>
+              )}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* Footer */}
-      <footer className="py-10 px-8 border-t border-border">
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="font-display text-xl font-semibold text-primary">โตทัน</span>
-            <span className="font-body text-xs text-muted">NSC 2026 · National Software Contest</span>
+      {/* ── Footer ──────────────────────────────────────────────────────── */}
+      <footer role="contentinfo" className="py-9 px-6 border-t border-border bg-bg">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <LogoMark scrolled />
+            <span className="font-display font-bold text-ink">โตทัน</span>
+            <span className="font-body text-xs text-muted">· NSC 2026 · Mahidol University</span>
           </div>
-          <p className="font-body text-xs text-muted">
-            ระบบประเมินอายุกระดูกและติดตามการเจริญเติบโตสำหรับเด็กไทย
+          <p className="font-body text-xs text-muted text-center">
+            {th
+              ? "ระบบประเมินอายุกระดูกและติดตามการเจริญเติบโตสำหรับเด็กไทย"
+              : "Bone age assessment and growth monitoring for Thai children"}
           </p>
+          <div className="flex items-center gap-3">
+            <button onClick={toggleLang} className="font-body text-xs font-medium text-muted hover:text-ink transition-colors">
+              {th ? "English" : "ภาษาไทย"}
+            </button>
+            <span className="text-border" aria-hidden>·</span>
+            <button onClick={toggleTheme} aria-label="Toggle theme" className="text-muted hover:text-ink transition-colors">
+              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+            </button>
+          </div>
         </div>
       </footer>
     </div>
   );
+}
+
+// ── Aurora field (animated mesh blobs) ──────────────────────────────────────────
+function AuroraField({ subtle = false }: { subtle?: boolean }) {
+  const o = subtle ? 0.22 : 0.4;
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none"
+      style={{ transform: "translate3d(var(--mx,0),var(--my,0),0)", transition: "transform 0.3s ease-out", zIndex: 2 }}>
+      {/* Dot grid */}
+      <div className="absolute inset-0 opacity-[0.07]"
+        style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
+      {/* Blobs */}
+      <div className="absolute top-[8%] left-[12%] w-[42vw] h-[42vw] max-w-[560px] max-h-[560px] blur-[90px] animate-blob animate-aurora"
+        style={{ background: "radial-gradient(circle, rgba(56,189,248,0.9), transparent 65%)", opacity: o }} />
+      <div className="absolute top-[20%] right-[6%] w-[40vw] h-[40vw] max-w-[520px] max-h-[520px] blur-[100px] animate-blob animate-aurora-slow"
+        style={{ background: "radial-gradient(circle, rgba(167,139,250,0.85), transparent 65%)", opacity: o, animationDelay: "-6s" }} />
+      <div className="absolute bottom-[2%] left-[28%] w-[38vw] h-[38vw] max-w-[480px] max-h-[480px] blur-[110px] animate-blob animate-aurora"
+        style={{ background: "radial-gradient(circle, rgba(234,108,73,0.8), transparent 65%)", opacity: o * 0.9, animationDelay: "-12s" }} />
+    </div>
+  );
+}
+
+// ── Floating particles ──────────────────────────────────────────────────────────
+function Particles() {
+  const dots = [
+    { l: "12%", t: "22%", s: 4, d: "0s" }, { l: "82%", t: "30%", s: 3, d: "0.6s" },
+    { l: "26%", t: "68%", s: 5, d: "1.2s" }, { l: "70%", t: "72%", s: 3, d: "1.8s" },
+    { l: "48%", t: "16%", s: 3, d: "0.9s" }, { l: "90%", t: "58%", s: 4, d: "1.5s" },
+    { l: "6%", t: "52%", s: 3, d: "2.1s" }, { l: "58%", t: "84%", s: 4, d: "0.3s" },
+  ];
+  return (
+    <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 3 }}>
+      {dots.map((d, i) => (
+        <span key={i} className="absolute rounded-full bg-white animate-twinkle"
+          style={{ left: d.l, top: d.t, width: d.s, height: d.s, animationDelay: d.d }} />
+      ))}
+    </div>
+  );
+}
+
+// ── Stat blocks ─────────────────────────────────────────────────────────────────
+function StatBlock({ value, prefix = "", suffix = "", label }: { value: number; prefix?: string; suffix?: string; label: string }) {
+  const { ref, val } = useCountUp(value);
+  return (
+    <div className="text-center sm:text-left">
+      <div className="font-display font-bold text-ink tabular-nums" style={{ fontSize: "2rem", letterSpacing: "-0.02em" }}>
+        {prefix}<span ref={ref}>{val}</span>{suffix}
+      </div>
+      <div className="font-body text-sm text-muted mt-0.5">{label}</div>
+    </div>
+  );
+}
+function StaticStat({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="text-center sm:text-left">
+      <div className="font-display font-bold text-gradient" style={{ fontSize: "2rem", letterSpacing: "-0.02em" }}>{value}</div>
+      <div className="font-body text-sm text-muted mt-0.5">{label}</div>
+    </div>
+  );
+}
+
+// ── Flow Diagram (animated) ─────────────────────────────────────────────────────
+function FlowDiagram({ lang }: { lang: string }) {
+  const th = lang === "th";
+  return (
+    <div className="flex items-center justify-center gap-2.5 md:gap-4 py-4" aria-hidden="true">
+      {/* X-ray card with scan line */}
+      <div className="relative flex flex-col items-center gap-2.5 rounded-2xl p-4 md:p-5 w-32 md:w-36 animate-float-soft overflow-hidden"
+        style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", backdropFilter: "blur(8px)" }}>
+        <div className="absolute left-0 right-0 h-6 pointer-events-none"
+          style={{ top: 0, background: "linear-gradient(rgba(56,189,248,0.55), transparent)", animation: "scan-line 3.5s ease-in-out infinite" }} />
+        <div className="relative w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center">
+          <XrayIcon className="w-6 h-6 text-white" />
+        </div>
+        <div className="text-center">
+          <p className="font-display font-semibold text-white text-xs leading-tight">{th ? "X-ray มือ" : "Hand X-ray"}</p>
+          <p className="font-body text-white/55 text-[10px] mt-0.5">{th ? "อัปโหลด" : "Upload"}</p>
+        </div>
+      </div>
+
+      <FlowArrow />
+
+      {/* AI card with pulse ring */}
+      <div className="relative flex flex-col items-center gap-2.5 rounded-2xl p-4 md:p-5 w-32 md:w-36 animate-float overflow-hidden"
+        style={{ background: "rgba(255,255,255,0.20)", border: "1px solid rgba(255,255,255,0.34)", backdropFilter: "blur(8px)", boxShadow: "0 0 40px rgba(56,189,248,0.35)" }}>
+        <div className="relative w-12 h-12 rounded-xl bg-white/22 flex items-center justify-center">
+          <span className="absolute inset-0 rounded-xl border border-white/50 animate-pulse-ring" />
+          <ChipIcon className="w-6 h-6 text-white animate-spin-slow" />
+        </div>
+        <div className="text-center">
+          <p className="font-display font-semibold text-white text-xs leading-tight">{th ? "AI วิเคราะห์" : "AI Analysis"}</p>
+          <p className="font-body text-white/55 text-[10px] mt-0.5">Greulich &amp; Pyle</p>
+        </div>
+      </div>
+
+      <FlowArrow />
+
+      {/* Result card */}
+      <div className="relative flex flex-col items-center gap-2.5 rounded-2xl p-4 md:p-5 w-32 md:w-36 animate-float-soft overflow-hidden"
+        style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", animationDelay: "-2s" }}>
+        <div className="relative w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center">
+          <ReportIcon className="w-6 h-6 text-white" />
+        </div>
+        <div className="text-center">
+          <p className="font-display font-semibold text-white text-xs leading-tight">{th ? "ผลและรายงาน" : "Result & Report"}</p>
+          <p className="font-body text-white/55 text-[10px] mt-0.5">{th ? "PDF พร้อมส่ง" : "PDF ready"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FlowArrow() {
+  return (
+    <div className="flex items-center gap-0.5 flex-shrink-0">
+      {[0, 1, 2].map(i => (
+        <span key={i} className="w-1 h-1 rounded-full bg-white/70 animate-twinkle" style={{ animationDelay: `${i * 0.25}s` }} />
+      ))}
+    </div>
+  );
+}
+
+// ── Icons ──────────────────────────────────────────────────────────────────────
+function LogoMark({ scrolled = false }: { scrolled?: boolean }) {
+  return (
+    <div className="w-8 h-8 rounded-xl flex items-center justify-center transition-all"
+      style={scrolled
+        ? { background: "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 4px 14px rgba(14,165,233,0.4)" }
+        : { background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)" }}>
+      <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+      </svg>
+    </div>
+  );
+}
+
+function ArrowRight({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4-4 4M3 12h18" />
+    </svg>
+  );
+}
+function XrayIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+      <rect x="3" y="11" width="8" height="9" rx="1" />
+      <rect x="4" y="5" width="2" height="7" rx="1" /><rect x="7" y="3" width="2" height="9" rx="1" />
+      <rect x="10" y="4" width="2" height="8" rx="1" /><rect x="13" y="6" width="1.5" height="7" rx="0.75" />
+      <rect x="3" y="20" width="8" height="1" rx="0.5" />
+    </svg>
+  );
+}
+function ChipIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <path d="M10 7V4M14 7V4M10 20v-3M14 20v-3M7 10H4M7 14H4M17 10h3M17 14h3" />
+    </svg>
+  );
+}
+function ReportIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6M9 15h4M5 3h9l5 5v13a1 1 0 01-1 1H5a1 1 0 01-1-1V4a1 1 0 011-1z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M14 3v5h5" />
+    </svg>
+  );
+}
+function DoctorIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 6a3 3 0 100-6 3 3 0 000 6zM5.5 21a6.5 6.5 0 0113 0" />
+      <path strokeLinecap="round" d="M15 13h2m0 0h2m-2 0v-2m0 2v2" />
+    </svg>
+  );
+}
+function ParentIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 7a4 4 0 100 8 4 4 0 000-8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
+    </svg>
+  );
+}
+function CheckIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+function MoonIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" /></svg>;
+}
+function SunIcon() {
+  return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="5" /><path strokeLinecap="round" d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></svg>;
 }

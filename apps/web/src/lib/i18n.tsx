@@ -1,0 +1,368 @@
+"use client";
+
+import { createContext, useContext, useEffect, useState } from "react";
+
+export type Lang = "th" | "en";
+
+const translations = {
+  th: {
+    nav: {
+      features: "ฟีเจอร์", how: "วิธีใช้งาน", about: "เกี่ยวกับ", start: "เริ่มใช้งาน",
+    },
+    hero: {
+      badge: "AI-Powered Bone Age Assessment",
+      line1: "โตทัน", line2: "ประเมิน", line3: "อายุกระดูก",
+      desc: "ระบบวิเคราะห์ภาพ X-ray ด้วย AI เพื่อประเมินอายุกระดูกและติดตามการเจริญเติบโตของเด็กไทย อย่างแม่นยำและรวดเร็ว",
+      cta1: "เริ่มประเมินทันที", cta2: "ดูตัวอย่าง",
+      s1v: "95%+", s1l: "ความแม่นยำ",
+      s2v: "<30s", s2l: "เวลาวิเคราะห์",
+      s3v: "ฟรี", s3l: "สำหรับแพทย์",
+    },
+    card: {
+      result: "ผลการวิเคราะห์", boneAge: "อายุกระดูก (Bone Age)",
+      growth: "พัฒนาการ", normal: "ปกติ",
+    },
+    features: {
+      tag: "ความสามารถ",
+      title: "ครบทุกความต้องการ", titleAccent: "ในระบบเดียว",
+      items: [
+        { title: "AI วิเคราะห์ X-ray",       desc: "ประเมินอายุกระดูกจากภาพ X-ray มือด้วย Deep Learning แม่นยำตามมาตรฐาน Greulich & Pyle" },
+        { title: "ติดตามการเจริญเติบโต",      desc: "กราฟพัฒนาการแบบ interactive เปรียบเทียบกับ percentile มาตรฐานสำหรับเด็กไทย" },
+        { title: "จัดการข้อมูลผู้ป่วย",       desc: "ระบบ RBAC แยกสิทธิ์แพทย์และผู้ปกครอง ข้อมูลปลอดภัยและเป็นส่วนตัว" },
+        { title: "รายงานอัตโนมัติ",           desc: "ออก PDF รายงานผลการประเมินพร้อม visualization ส่งต่อแพทย์ได้ทันที" },
+        { title: "การแจ้งเตือนอัจฉริยะ",     desc: "แจ้งเตือนอัตโนมัติเมื่อถึงเวลานัดติดตามผล ผ่าน Line หรือ Email" },
+        { title: "รองรับทุกอุปกรณ์",          desc: "Responsive design ใช้งานได้บน Desktop, Tablet และ Mobile อย่างลื่นไหล" },
+      ],
+    },
+    how: {
+      tag: "ขั้นตอน", title: "ใช้งานง่าย", titleAccent: "3 ขั้นตอน",
+      steps: [
+        { step: "01", title: "อัปโหลด X-ray",  desc: "นำภาพ X-ray มือซ้ายอัปโหลดเข้าระบบ รองรับ JPEG, PNG และ DICOM" },
+        { step: "02", title: "AI วิเคราะห์",   desc: "ระบบ AI ประมวลผลโดยอัตโนมัติ เปรียบเทียบกับ atlas มาตรฐาน Greulich & Pyle" },
+        { step: "03", title: "รับผลรายงาน",   desc: "ดูผลการประเมินอายุกระดูก confidence score และดาวน์โหลด PDF ได้ทันที" },
+      ],
+    },
+    cta: {
+      tag: "พร้อมแล้วหรือยัง?",
+      title: "เริ่มดูแลเด็กไทย", titleAccent: "ให้โตทันวัย",
+      desc: "ระบบ AI ที่ออกแบบมาเพื่อแพทย์เด็กไทยโดยเฉพาะ ใช้งานง่าย แม่นยำ และปลอดภัย",
+      btn: "ทดลองใช้งานฟรี",
+    },
+    footer: "ระบบประเมินอายุกระดูกและติดตามการเจริญเติบโตสำหรับเด็กไทย",
+
+    login: {
+      tabLogin: "เข้าสู่ระบบ",
+      tabRegister: "สมัครสมาชิก",
+      welcomeBack: "ยินดีต้อนรับกลับ",
+      createAccount: "สร้างบัญชีใหม่",
+      loginSub: "เข้าสู่ระบบเพื่อจัดการผู้ป่วยและดูผลประเมิน",
+      registerSub: "กรอกข้อมูลเพื่อเริ่มใช้งานโตทัน",
+      email: "อีเมล",
+      password: "รหัสผ่าน",
+      passwordMin: "อย่างน้อย 8 ตัวอักษร",
+      fullName: "ชื่อ-นามสกุล",
+      phone: "เบอร์โทรศัพท์",
+      roleLabel: "บทบาทในระบบ",
+      roleDoctor: "แพทย์",
+      roleDoctorSub: "จัดการผู้ป่วย",
+      roleParent: "ผู้ปกครอง",
+      roleParentSub: "ติดตามบุตรหลาน",
+      forgot: "ลืมรหัสผ่าน?",
+      loginBtn: "เข้าสู่ระบบ",
+      registerBtn: "สมัครสมาชิก",
+      processing: "กำลังดำเนินการ...",
+      noAccount: "ยังไม่มีบัญชี?",
+      hasAccount: "มีบัญชีแล้ว?",
+      signUp: "สมัครสมาชิก",
+      signIn: "เข้าสู่ระบบ",
+      success: "สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ",
+      heroTitle: "ดูแลเด็กไทย",
+      heroAccent: "ให้โตทันวัย",
+      heroDesc: "ระบบวิเคราะห์อายุกระดูกจาก X-ray ด้วย AI มาตรฐาน Greulich & Pyle เพื่อแพทย์เด็กไทย",
+      s1: "ความแม่นยำ",
+      s2: "วิเคราะห์",
+      s3: "ระบบสิทธิ์",
+      trust1: "ข้อมูลเข้ารหัส TLS 1.3 ทุกขั้นตอน",
+      trust2: "ออกแบบร่วมกับแพทย์เด็กมหาวิทยาลัย",
+      trust3: "มาตรฐาน Greulich & Pyle Atlas",
+    },
+
+    dash: {
+      overview: "ภาพรวม",
+      patients: "ผู้ป่วย",
+      children: "บุตรหลาน",
+      assessments: "ผลการประเมิน",
+      reports: "รายงาน PDF",
+      recommendations: "คำแนะนำ",
+      logout: "ออกจากระบบ",
+      greeting: "สวัสดี",
+      doctor: "แพทย์",
+      parent: "ผู้ปกครอง",
+      statPatients: "ผู้ป่วยทั้งหมด",
+      statChildren: "บุตรหลาน",
+      statToday: "การประเมินวันนี้",
+      statFollowup: "รอติดตามผล",
+      statSentRec: "คำแนะนำที่ส่ง",
+      statNewRec: "คำแนะนำใหม่",
+      recentPatients: "ผู้ป่วยล่าสุด",
+      myChildren: "ข้อมูลบุตรหลาน",
+      viewAll: "ดูทั้งหมด →",
+      noPatients: "ยังไม่มีผู้ป่วย",
+      noChildren: "ยังไม่มีข้อมูลบุตรหลาน",
+      addHint: "กดปุ่ม 'เพิ่มผู้ป่วยใหม่' เพื่อเริ่มต้น",
+      contactHint: "ติดต่อแพทย์เพื่อ link บัญชี",
+      addPatient: "+ เพิ่มผู้ป่วยใหม่",
+      viewHistory: "ดูประวัติ →",
+      born: "เกิด",
+      years: "ปี",
+      loading: "กำลังโหลด...",
+      settings: "ตั้งค่า",
+    },
+
+    settings: {
+      title: "ตั้งค่าโปรไฟล์",
+      profileTitle: "ข้อมูลโปรไฟล์",
+      profileSub: "แก้ไขชื่อและข้อมูลส่วนตัว",
+      securityTitle: "ความปลอดภัย",
+      securitySub: "เปลี่ยนรหัสผ่านบัญชีของคุณ",
+      prefsTitle: "การแสดงผล",
+      prefsSub: "ปรับธีมและภาษา",
+      fullName: "ชื่อ-นามสกุล",
+      phone: "เบอร์โทรศัพท์",
+      email: "อีเมล",
+      role: "บทบาทในระบบ",
+      save: "บันทึกการเปลี่ยนแปลง",
+      saving: "กำลังบันทึก...",
+      saved: "บันทึกเรียบร้อยแล้ว",
+      saveError: "เกิดข้อผิดพลาด กรุณาลองใหม่",
+      currentPwd: "รหัสผ่านปัจจุบัน",
+      newPwd: "รหัสผ่านใหม่",
+      confirmPwd: "ยืนยันรหัสผ่านใหม่",
+      changePwd: "เปลี่ยนรหัสผ่าน",
+      pwdMismatch: "รหัสผ่านใหม่ไม่ตรงกัน",
+      pwdMin: "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
+      pwdChanged: "เปลี่ยนรหัสผ่านสำเร็จ",
+      pwdError: "รหัสผ่านปัจจุบันไม่ถูกต้อง",
+      themeLabel: "ธีม",
+      themeDark: "โหมดมืด",
+      themeLight: "โหมดสว่าง",
+      langLabel: "ภาษา",
+      langTh: "ภาษาไทย",
+      langEn: "English",
+      roleDoctor: "แพทย์",
+      roleParent: "ผู้ปกครอง",
+      readOnly: "ไม่สามารถแก้ไขได้",
+      avatarHint: "คลิกเพื่อเปลี่ยนรูปโปรไฟล์",
+      avatarLabel: "รูปโปรไฟล์",
+      dangerTitle: "Danger Zone",
+      dangerSub: "การกระทำนี้ไม่สามารถย้อนกลับได้",
+      deleteAccount: "ลบบัญชี",
+      deleteConfirmTitle: "ยืนยันการลบบัญชี",
+      deleteConfirmDesc: "บัญชีและข้อมูลทั้งหมดจะถูกลบถาวร ไม่สามารถกู้คืนได้",
+      deleteConfirmInput: "พิมพ์อีเมลเพื่อยืนยัน",
+      deleteConfirmBtn: "ลบบัญชีถาวร",
+      deleteCancelBtn: "ยกเลิก",
+      deleting: "กำลังลบ...",
+    },
+  },
+
+  en: {
+    nav: {
+      features: "Features", how: "How It Works", about: "About", start: "Get Started",
+    },
+    hero: {
+      badge: "AI-Powered Bone Age Assessment",
+      line1: "TotTan", line2: "Assess", line3: "Bone Age",
+      desc: "AI-powered X-ray analysis for precise bone age assessment and growth monitoring of Thai children — fast and accurate.",
+      cta1: "Start Assessment", cta2: "View Demo",
+      s1v: "95%+", s1l: "Accuracy",
+      s2v: "<30s", s2l: "Analysis Time",
+      s3v: "Free", s3l: "For Doctors",
+    },
+    card: {
+      result: "Analysis Result", boneAge: "Bone Age",
+      growth: "Development", normal: "Normal",
+    },
+    features: {
+      tag: "Capabilities",
+      title: "Everything You Need", titleAccent: "In One System",
+      items: [
+        { title: "AI X-ray Analysis",    desc: "Assess bone age from hand X-rays using Deep Learning — Greulich & Pyle standard accuracy." },
+        { title: "Growth Monitoring",    desc: "Interactive growth charts comparing against standard percentiles for Thai children." },
+        { title: "Patient Management",   desc: "RBAC system separating doctor and parent permissions. Safe and private data." },
+        { title: "Automated Reports",    desc: "Auto-generate PDF assessment reports with visualizations for instant sharing." },
+        { title: "Smart Notifications",  desc: "Automatic reminders when follow-up appointments are due, via Line or Email." },
+        { title: "Cross-Device Support", desc: "Responsive design works seamlessly on Desktop, Tablet, and Mobile." },
+      ],
+    },
+    how: {
+      tag: "Process", title: "Simple", titleAccent: "3 Steps",
+      steps: [
+        { step: "01", title: "Upload X-ray",    desc: "Upload the child's left-hand X-ray. Supports JPEG, PNG, and DICOM formats." },
+        { step: "02", title: "AI Analyzes",     desc: "AI automatically processes and compares against the Greulich & Pyle atlas." },
+        { step: "03", title: "Get Report",      desc: "View bone age result with confidence score and download PDF instantly." },
+      ],
+    },
+    cta: {
+      tag: "Ready to start?",
+      title: "Start Caring for", titleAccent: "Thai Children",
+      desc: "AI system designed specifically for Thai pediatricians. Easy, accurate, and safe.",
+      btn: "Try for Free",
+    },
+    footer: "Bone age assessment and growth monitoring system for Thai children",
+
+    login: {
+      tabLogin: "Login",
+      tabRegister: "Register",
+      welcomeBack: "Welcome Back",
+      createAccount: "Create Account",
+      loginSub: "Sign in to manage patients and view results",
+      registerSub: "Fill in your details to get started with TotTan",
+      email: "Email",
+      password: "Password",
+      passwordMin: "At least 8 characters",
+      fullName: "Full Name",
+      phone: "Phone Number",
+      roleLabel: "Your Role",
+      roleDoctor: "Doctor",
+      roleDoctorSub: "Manage patients",
+      roleParent: "Parent",
+      roleParentSub: "Monitor your child",
+      forgot: "Forgot password?",
+      loginBtn: "Sign In",
+      registerBtn: "Create Account",
+      processing: "Processing...",
+      noAccount: "Don't have an account?",
+      hasAccount: "Already have an account?",
+      signUp: "Sign up",
+      signIn: "Sign in",
+      success: "Account created! Please sign in.",
+      heroTitle: "Caring for Children",
+      heroAccent: "On Time",
+      heroDesc: "AI bone age assessment from X-ray — Greulich & Pyle standard — designed for Thai pediatricians.",
+      s1: "Accuracy",
+      s2: "Analysis",
+      s3: "Access Control",
+      trust1: "End-to-end TLS 1.3 encryption",
+      trust2: "Designed with university pediatricians",
+      trust3: "Greulich & Pyle Atlas standard",
+    },
+
+    dash: {
+      overview: "Overview",
+      patients: "Patients",
+      children: "Children",
+      assessments: "Assessments",
+      reports: "PDF Reports",
+      recommendations: "Recommendations",
+      logout: "Sign Out",
+      greeting: "Hello",
+      doctor: "Doctor",
+      parent: "Parent",
+      statPatients: "Total Patients",
+      statChildren: "Children",
+      statToday: "Today's Assessments",
+      statFollowup: "Pending Follow-ups",
+      statSentRec: "Recommendations Sent",
+      statNewRec: "New Recommendations",
+      recentPatients: "Recent Patients",
+      myChildren: "My Children",
+      viewAll: "View All →",
+      noPatients: "No patients yet",
+      noChildren: "No children linked yet",
+      addHint: "Click 'Add New Patient' to get started",
+      contactHint: "Contact your doctor to link your account",
+      addPatient: "+ Add New Patient",
+      viewHistory: "View History →",
+      born: "Born",
+      years: "yrs",
+      loading: "Loading...",
+      settings: "Settings",
+    },
+
+    settings: {
+      title: "Profile Settings",
+      profileTitle: "Profile Information",
+      profileSub: "Update your name and personal details",
+      securityTitle: "Security",
+      securitySub: "Change your account password",
+      prefsTitle: "Display Preferences",
+      prefsSub: "Customize theme and language",
+      fullName: "Full Name",
+      phone: "Phone Number",
+      email: "Email",
+      role: "Role",
+      save: "Save Changes",
+      saving: "Saving...",
+      saved: "Saved successfully",
+      saveError: "Something went wrong, please try again",
+      currentPwd: "Current Password",
+      newPwd: "New Password",
+      confirmPwd: "Confirm New Password",
+      changePwd: "Change Password",
+      pwdMismatch: "New passwords do not match",
+      pwdMin: "Password must be at least 8 characters",
+      pwdChanged: "Password changed successfully",
+      pwdError: "Current password is incorrect",
+      themeLabel: "Theme",
+      themeDark: "Dark mode",
+      themeLight: "Light mode",
+      langLabel: "Language",
+      langTh: "ภาษาไทย",
+      langEn: "English",
+      roleDoctor: "Doctor",
+      roleParent: "Parent",
+      readOnly: "Cannot be changed",
+      avatarHint: "Click to change profile photo",
+      avatarLabel: "Profile Photo",
+      dangerTitle: "Danger Zone",
+      dangerSub: "This action cannot be undone",
+      deleteAccount: "Delete Account",
+      deleteConfirmTitle: "Confirm Account Deletion",
+      deleteConfirmDesc: "Your account and all data will be permanently deleted and cannot be recovered.",
+      deleteConfirmInput: "Type your email to confirm",
+      deleteConfirmBtn: "Permanently Delete Account",
+      deleteCancelBtn: "Cancel",
+      deleting: "Deleting...",
+    },
+  },
+} as const;
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type Translations = typeof translations.th & Record<string, any>;
+
+interface I18nCtx {
+  lang: Lang;
+  toggle: () => void;
+  t: Translations;
+}
+
+const Ctx = createContext<I18nCtx>({
+  lang: "th",
+  toggle: () => {},
+  t: translations.th,
+});
+
+export function I18nProvider({ children }: { children: React.ReactNode }) {
+  const [lang, setLang] = useState<Lang>("th");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("lang") as Lang | null;
+    if (stored === "th" || stored === "en") setLang(stored);
+  }, []);
+
+  function apply(l: Lang) {
+    setLang(l);
+    localStorage.setItem("lang", l);
+  }
+
+  const toggle = () => apply(lang === "th" ? "en" : "th");
+
+  return (
+    <Ctx.Provider value={{ lang, toggle, t: translations[lang] as Translations }}>
+      {children}
+    </Ctx.Provider>
+  );
+}
+
+export const useI18n = () => useContext(Ctx);
