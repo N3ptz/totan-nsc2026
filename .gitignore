@@ -51,3 +51,6 @@ redisdata/
 # Test coverage
 coverage/
 .nyc_output/
+
+# Project docs (contains credentials)
+docs/
