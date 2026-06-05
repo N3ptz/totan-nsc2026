@@ -1,6 +1,6 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn, OneToOne,
+  CreateDateColumn, UpdateDateColumn,
 } from 'typeorm';
 
 export enum UserRole {
@@ -10,9 +10,10 @@ export enum UserRole {
 }
 
 export enum UserStatus {
-  PENDING  = 'pending',   // รอ admin อนุมัติ (สำหรับแพทย์)
-  ACTIVE   = 'active',
-  INACTIVE = 'inactive',
+  UNVERIFIED = 'unverified', // รอยืนยัน email
+  PENDING    = 'pending',    // รอ admin อนุมัติ (สำหรับแพทย์)
+  ACTIVE     = 'active',
+  INACTIVE   = 'inactive',
 }
 
 @Entity('users')
@@ -31,6 +32,12 @@ export class User {
 
   @Column({ type: 'enum', enum: UserStatus, default: UserStatus.ACTIVE })
   status: UserStatus;
+
+  @Column({ nullable: true })
+  verifyOtp: string;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  verifyOtpExpiresAt: Date;
 
   @CreateDateColumn()
   createdAt: Date;

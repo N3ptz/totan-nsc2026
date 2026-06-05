@@ -1,14 +1,19 @@
-import { Controller, Post, Get, Patch, Delete, Body, Query, UseGuards, Request } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Query, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { StorageService } from '../storage/storage.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(
+    private authService: AuthService,
+    private storageService: StorageService,
+  ) {}
 
   // POST /auth/register
   @Post('register')
@@ -43,11 +48,14 @@ export class AuthController {
     return this.authService.changePassword(req.user.userId, dto);
   }
 
-  // POST /auth/avatar — รับ base64 string
+  // POST /auth/avatar — รับไฟล์รูปภาพ → upload ไป R2
   @UseGuards(JwtAuthGuard)
   @Post('avatar')
-  updateAvatar(@Request() req: any, @Body('avatarBase64') avatarBase64: string) {
-    return this.authService.updateAvatar(req.user.userId, avatarBase64);
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  async updateAvatar(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('ไม่พบไฟล์');
+    const avatarUrl = await this.storageService.upload(file, 'avatars');
+    return this.authService.updateAvatar(req.user.userId, avatarUrl);
   }
 
   // DELETE /auth/account
@@ -62,6 +70,18 @@ export class AuthController {
   @Get('find-by-email')
   findByEmail(@Query('email') email: string) {
     return this.authService.findByEmail(email);
+  }
+
+  // POST /auth/verify-email — ยืนยัน email ด้วย OTP
+  @Post('verify-email')
+  verifyEmail(@Body() body: { email: string; otp: string }) {
+    return this.authService.verifyEmail(body.email, body.otp);
+  }
+
+  // POST /auth/resend-verify — ขอ OTP ใหม่
+  @Post('resend-verify')
+  resendVerify(@Body() body: { email: string }) {
+    return this.authService.resendVerifyOtp(body.email);
   }
 
   // GET /auth/health

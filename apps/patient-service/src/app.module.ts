@@ -6,6 +6,7 @@ import { Child } from './children/child.entity';
 import { Assessment } from './assessments/assessment.entity';
 import { Recommendation } from './recommendations/recommendation.entity';
 import { RedisService } from './redis/redis.service';
+import { StorageModule } from './storage/storage.module';
 import { ChildrenController } from './children/children.controller';
 import { ChildrenService } from './children/children.service';
 import { AssessmentsController } from './assessments/assessments.controller';
@@ -25,6 +26,7 @@ import { RecommendationsService } from './recommendations/recommendations.servic
     }),
 
     TypeOrmModule.forFeature([Child, Assessment, Recommendation]),
+    StorageModule,
   ],
   controllers: [ChildrenController, AssessmentsController, RecommendationsController],
   providers: [ChildrenService, AssessmentsService, RecommendationsService, RedisService],

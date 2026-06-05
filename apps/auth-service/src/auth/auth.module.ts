@@ -9,6 +9,8 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { User } from '../users/user.entity';
 import { Doctor } from '../users/doctor.entity';
 import { Parent } from '../users/parent.entity';
+import { StorageModule } from '../storage/storage.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { Parent } from '../users/parent.entity';
       }),
     }),
     TypeOrmModule.forFeature([User, Doctor, Parent]),
+    StorageModule,
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

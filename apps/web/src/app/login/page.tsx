@@ -13,7 +13,8 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (localStorage.getItem("token")) router.replace("/dashboard");
-  }, [router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const { theme, toggle: toggleTheme } = useTheme();
   const { lang, toggle: toggleLang, t } = useI18n();
   const tl = t.login;
@@ -27,6 +28,11 @@ export default function LoginPage() {
   const [regData, setRegData] = useState({ email: "", password: "", fullName: "", phone: "", relationship: "" });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  // OTP verification state
+  const [verifyStep, setVerifyStep] = useState<{ email: string; password: string; avatarFile: File | null } | null>(null);
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [resendMsg, setResendMsg] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,27 +58,69 @@ export default function LoginPage() {
         phone: regData.phone || undefined,
         relationship: role === "parent" ? regData.relationship : undefined,
       });
-
-      if (avatarFile) {
-        try {
-          const { data: loginResult } = await authApi.login(regData.email, regData.password);
-          localStorage.setItem("token", loginResult.accessToken);
-          localStorage.setItem("user", JSON.stringify(loginResult.user));
-          await authApi.uploadAvatar(avatarFile);
-          router.push("/dashboard");
-          return;
-        } catch {}
-      }
-
-      setRegistered(true);
-      setTab("login");
-      setLoginData(d => ({ ...d, email: regData.email }));
-      setRegData({ email: "", password: "", fullName: "", phone: "", relationship: "" });
-      setAvatarFile(null);
-      setAvatarPreview(null);
+      setVerifyStep({ email: regData.email, password: regData.password, avatarFile });
+      setOtp(["", "", "", "", "", ""]);
+      setResendMsg("");
     } catch (err: any) {
       setError(err.response?.data?.message ?? "เกิดข้อผิดพลาด");
     } finally { setLoading(false); }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verifyStep) return;
+    const code = otp.join("");
+    if (code.length < 6) return;
+    setError(""); setLoading(true);
+    try {
+      await authApi.verifyEmail(verifyStep.email, code);
+      // auto-login หลัง verify สำเร็จ
+      const { data } = await authApi.login(verifyStep.email, verifyStep.password);
+      localStorage.setItem("token", data.accessToken);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      // upload avatar ถ้ามี
+      if (verifyStep.avatarFile) {
+        await authApi.uploadAvatar(verifyStep.avatarFile).catch(() => {});
+      }
+      router.push("/dashboard");
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? "เกิดข้อผิดพลาด");
+    } finally { setLoading(false); }
+  };
+
+  const handleResendOtp = async () => {
+    if (!verifyStep) return;
+    setError(""); setResendMsg("");
+    try {
+      await authApi.resendVerify(verifyStep.email);
+      setResendMsg(tl.resendSent);
+    } catch (err: any) {
+      setError(err.response?.data?.message ?? "เกิดข้อผิดพลาด");
+    }
+  };
+
+  const handleOtpInput = (idx: number, val: string) => {
+    const digit = val.replace(/\D/g, "").slice(-1);
+    const next = [...otp];
+    next[idx] = digit;
+    setOtp(next);
+    if (digit && idx < 5) {
+      document.getElementById(`otp-${idx + 1}`)?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (idx: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && !otp[idx] && idx > 0) {
+      document.getElementById(`otp-${idx - 1}`)?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    const text = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
+    if (text.length === 6) {
+      setOtp(text.split(""));
+      e.preventDefault();
+    }
   };
 
   return (
@@ -206,6 +254,84 @@ export default function LoginPage() {
               </Link>
             </div>
 
+            {/* ── OTP Verification Step ── */}
+            {verifyStep ? (
+              <>
+                <div className="mb-6 text-center">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                    style={{ background: "linear-gradient(135deg,rgb(var(--aurora-1)/0.15),rgb(var(--aurora-3)/0.15))", border: "1.5px solid rgb(var(--primary)/0.3)" }}>
+                    <svg className="w-8 h-8" style={{ color: "rgb(var(--primary))" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                    </svg>
+                  </div>
+                  <h2 className="font-display text-2xl font-bold text-ink">{tl.verifyTitle}</h2>
+                  <p className="font-body text-sm text-muted mt-1.5">
+                    {tl.verifySub}<br />
+                    <span className="font-semibold text-ink">{verifyStep.email}</span>
+                  </p>
+                </div>
+
+                {error && (
+                  <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl mb-5 text-sm font-body animate-fade-up"
+                    style={{ background: "rgb(var(--danger)/0.1)", color: "rgb(var(--danger))", border: "1px solid rgb(var(--danger)/0.25)" }}>
+                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                    </svg>
+                    {error}
+                  </div>
+                )}
+
+                {resendMsg && (
+                  <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl mb-5 text-sm font-body animate-fade-up"
+                    style={{ background: "rgb(var(--success)/0.1)", color: "rgb(var(--success))", border: "1px solid rgb(var(--success)/0.25)" }}>
+                    <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    {resendMsg}
+                  </div>
+                )}
+
+                <form onSubmit={handleVerifyOtp} className="space-y-6">
+                  <div className="flex gap-2.5 justify-center" onPaste={handleOtpPaste}>
+                    {otp.map((d, i) => (
+                      <input
+                        key={i}
+                        id={`otp-${i}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={d}
+                        onChange={e => handleOtpInput(i, e.target.value)}
+                        onKeyDown={e => handleOtpKeyDown(i, e)}
+                        className="w-12 h-14 text-center text-2xl font-bold font-display rounded-xl border-2 transition-all outline-none"
+                        style={{
+                          borderColor: d ? "rgb(var(--primary))" : "rgb(var(--border))",
+                          background: d ? "rgb(var(--primary)/0.08)" : "rgb(var(--surface)/0.7)",
+                          color: "rgb(var(--ink))",
+                          boxShadow: d ? "0 0 0 3px rgb(var(--primary)/0.14)" : "none",
+                        }}
+                        autoFocus={i === 0}
+                      />
+                    ))}
+                  </div>
+
+                  <SubmitBtn loading={loading} label={tl.verifyBtn} processing={tl.processing} />
+                </form>
+
+                <div className="flex items-center justify-between mt-5">
+                  <button type="button" onClick={() => { setVerifyStep(null); setError(""); setResendMsg(""); }}
+                    className="text-sm font-body text-muted hover:text-ink transition-colors">
+                    {tl.backToRegister}
+                  </button>
+                  <button type="button" onClick={handleResendOtp}
+                    className="text-sm font-body font-semibold hover:opacity-70 transition-opacity"
+                    style={{ color: "rgb(var(--primary))" }}>
+                    {tl.resendOtp}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
             {/* Heading */}
             <div className="mb-6">
               <h2 className="font-display text-[2rem] font-bold text-ink leading-tight">
@@ -354,6 +480,8 @@ export default function LoginPage() {
                 </p>
               </form>
             )}
+            </>
+          )}
           </div>
         </div>
 

@@ -26,7 +26,40 @@ export class AssessmentsService {
       status: AssessmentStatus.PENDING,
     });
     await this.assessmentRepo.save(assessment);
+
+    // Fire-and-forget: ส่งงานให้ AI service (non-blocking)
+    const child = await this.childRepo.findOne({ where: { id: dto.childId } });
+    this._callAiService(assessment, child).catch(
+      (err) => this.logger.warn(`AI service call failed (non-fatal): ${err.message}`),
+    );
+
     return assessment;
+  }
+
+  private async _callAiService(assessment: Assessment, child: Child | null): Promise<void> {
+    const aiUrl = process.env.AI_SERVICE_URL ?? 'http://localhost:8000';
+
+    await this.assessmentRepo.update(assessment.id, { status: AssessmentStatus.PROCESSING });
+
+    const response = await fetch(`${aiUrl}/predict`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assessmentId: assessment.id,
+        xrayImageUrl: assessment.xrayImageUrl,
+        sex: child?.sex ?? 'M',
+        dateOfBirth: child?.dateOfBirth ?? null,
+        heightCm: assessment.heightCm ?? null,
+        weightKg: assessment.weightKg ?? null,
+        fatherHeightCm: child?.fatherHeightCm ?? null,
+        motherHeightCm: child?.motherHeightCm ?? null,
+      }),
+    });
+
+    if (!response.ok) {
+      await this.assessmentRepo.update(assessment.id, { status: AssessmentStatus.FAILED });
+      throw new Error(`AI service responded with ${response.status}`);
+    }
   }
 
   // AI เรียก endpoint นี้เพื่อบันทึกผล
@@ -79,89 +112,13 @@ export class AssessmentsService {
     return assessment;
   }
 
-  // ── Mock AI (demo only) ──────────────────────────────────
+  // ── Mock AI (demo only) — delegate ให้ AI service เหมือน flow จริง ──
   async mockAiResult(id: string) {
     const assessment = await this.findOne(id);
     const child = await this.childRepo.findOne({ where: { id: assessment.childId } });
     if (!child) throw new NotFoundException('ไม่พบข้อมูลเด็ก');
-
-    // คำนวณอายุจริงในหน่วยเดือน
-    const dob = new Date(child.dateOfBirth);
-    const now = new Date();
-    const chronAgeMonths = (now.getFullYear() - dob.getFullYear()) * 12
-      + (now.getMonth() - dob.getMonth());
-
-    // Bone age = อายุจริง ± deviation (-8 ถึง +8 เดือน)
-    const deviation = Math.round((Math.random() - 0.5) * 16);
-    const boneAgeMonths = Math.max(6, chronAgeMonths + deviation);
-    const confidence   = 0.82 + Math.random() * 0.14; // 0.82–0.96
-
-    // Risk flag
-    let riskFlag = 'normal';
-    if (deviation <= -6)      riskFlag = 'delayed';
-    else if (deviation >= 6)  riskFlag = 'advanced';
-
-    // ส่วนสูง (ใช้จาก assessment ถ้ามี ไม่งั้นใช้จาก child)
-    const heightCm = Number(assessment.heightCm ?? child.heightCm ?? 0);
-    const weightKg = Number(assessment.weightKg ?? child.weightKg ?? 0);
-
-    // Target Height (Tanner-Whitehouse)
-    let targetHeightCm: number | undefined;
-    if (child.fatherHeightCm && child.motherHeightCm) {
-      const f = Number(child.fatherHeightCm);
-      const m = Number(child.motherHeightCm);
-      targetHeightCm = child.sex === 'M' ? (f + m + 13) / 2 : (f + m - 13) / 2;
-    }
-
-    // Final adult height (Bayley-Pinneau approximation — simplified)
-    let finalAdultHeightCm: number | undefined;
-    if (heightCm > 0) {
-      const boneAgeYears = boneAgeMonths / 12;
-      // rough multiplier based on bone age
-      const mult = boneAgeYears < 11 ? 1.18 : boneAgeYears < 13 ? 1.10 : 1.04;
-      finalAdultHeightCm = Math.round(heightCm * mult * 10) / 10;
-    }
-
-    // Percentile (Thai Growth Standards 2564 — simplified z-score ±2σ)
-    let heightPercentile: number | undefined;
-    let heightSdScore: number | undefined;
-    if (heightCm > 0 && chronAgeMonths > 0) {
-      const ageYears = chronAgeMonths / 12;
-      // rough median & SD by sex/age
-      const medianH = child.sex === 'M' ? 76 + ageYears * 6.5 : 75 + ageYears * 6.2;
-      const sdH = 4.5;
-      const z = (heightCm - medianH) / sdH;
-      heightSdScore = Math.round(z * 100) / 100;
-      // z → percentile approximation
-      const p = 50 + 34.1 * Math.tanh(z * 0.82);
-      heightPercentile = Math.round(Math.max(1, Math.min(99, p)));
-      if (heightPercentile < 3)  riskFlag = riskFlag === 'normal' ? 'short_stature' : riskFlag;
-      if (heightPercentile > 97) riskFlag = riskFlag === 'normal' ? 'tall_stature'  : riskFlag;
-    }
-
-    // BMI
-    let bmi: number | undefined;
-    let bmiPercentile: number | undefined;
-    if (heightCm > 0 && weightKg > 0) {
-      bmi = Math.round((weightKg / ((heightCm / 100) ** 2)) * 10) / 10;
-      bmiPercentile = Math.round(40 + Math.random() * 30);
-    }
-
-    const result = {
-      boneAgeMonths,
-      confidence: Math.round(confidence * 1000) / 1000,
-      heatmapUrl: 'mock://heatmap',
-      finalAdultHeightCm,
-      targetHeightCm,
-      heightPercentile,
-      weightPercentile: weightKg > 0 ? Math.round(30 + Math.random() * 40) : undefined,
-      bmi,
-      bmiPercentile,
-      heightSdScore,
-      riskFlag,
-    };
-
-    return this.saveAiResult(id, result);
+    await this._callAiService(assessment, child);
+    return assessment;
   }
 
   // บันทึก follow-up date

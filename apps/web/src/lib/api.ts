@@ -50,26 +50,17 @@ export const authApi = {
   findByEmail: (email: string) =>
     apiClient.get<{ id: string; email: string; role: string } | null>(`/auth/find-by-email?email=${encodeURIComponent(email)}`),
 
+  verifyEmail: (email: string, otp: string) =>
+    apiClient.post<{ message: string }>('/auth/verify-email', { email, otp }),
+
+  resendVerify: (email: string) =>
+    apiClient.post<{ message: string }>('/auth/resend-verify', { email }),
+
   uploadAvatar: (file: File) => {
-    return new Promise<{ data: { avatarUrl: string } }>((resolve, reject) => {
-      const img = new Image();
-      const objectUrl = URL.createObjectURL(file);
-      img.onload = () => {
-        const MAX = 300;
-        const ratio = Math.min(MAX / img.width, MAX / img.height, 1);
-        const canvas = document.createElement('canvas');
-        canvas.width  = Math.round(img.width  * ratio);
-        canvas.height = Math.round(img.height * ratio);
-        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-        URL.revokeObjectURL(objectUrl);
-        const base64 = canvas.toDataURL('image/jpeg', 0.82);
-        apiClient
-          .post<{ avatarUrl: string }>('/auth/avatar', { avatarBase64: base64 })
-          .then(resolve)
-          .catch(reject);
-      };
-      img.onerror = (e) => { URL.revokeObjectURL(objectUrl); reject(e); };
-      img.src = objectUrl;
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post<{ avatarUrl: string }>('/auth/avatar', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
 };
@@ -87,6 +78,13 @@ export const childrenApi = {
 export const assessmentsApi = {
   listByChild: (childId: string) => apiClient.get<Assessment[]>(`/assessments/child/${childId}`),
   get: (id: string) => apiClient.get<Assessment>(`/assessments/${id}`),
+
+  uploadXray: (file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post<{ xrayImageUrl: string }>('/assessments/upload-xray', form);
+  },
+
   create: (data: { childId: string; xrayImageUrl: string; heightCm?: number; weightKg?: number; clinicalNotes?: string }) =>
     apiClient.post<Assessment>('/assessments', data),
   setFollowup: (id: string, date: string, notes?: string) =>

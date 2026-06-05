@@ -1,10 +1,40 @@
-import { Controller, Post, Get, Patch, Body, Param, Request, UnauthorizedException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Request, UnauthorizedException, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { AssessmentsService } from './assessments.service';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
+import { StorageService } from '../storage/storage.service';
 
 @Controller('assessments')
 export class AssessmentsController {
-  constructor(private assessmentsService: AssessmentsService) {}
+  constructor(
+    private assessmentsService: AssessmentsService,
+    private storageService: StorageService,
+  ) {}
+
+  // POST /assessments/upload-xray — อัปโหลดภาพ X-ray → คืน URL
+  @Post('upload-xray')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  async uploadXray(@UploadedFile() file: Express.Multer.File) {
+    if (!file) throw new BadRequestException('ไม่พบไฟล์');
+    const url = await this.storageService.upload(file, 'xrays');
+    return { xrayImageUrl: url };
+  }
+
+  // POST /assessments/upload-heatmap — AI service อัปโหลด Grad-CAM heatmap → คืน URL
+  @Post('upload-heatmap')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
+  async uploadHeatmap(
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req: any,
+  ) {
+    if (!file) throw new BadRequestException('ไม่พบไฟล์');
+    const secret = req.headers['x-internal-secret'];
+    if (secret !== process.env.INTERNAL_SECRET) {
+      throw new UnauthorizedException('Internal endpoint');
+    }
+    const url = await this.storageService.upload(file, 'heatmaps');
+    return { heatmapUrl: url };
+  }
 
   // POST /assessments — แพทย์สร้างการประเมินใหม่
   @Post()

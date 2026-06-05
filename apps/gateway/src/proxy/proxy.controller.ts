@@ -26,15 +26,20 @@ export class ProxyController {
     const targetUrl = `${ROUTES[prefix]}${req.path}`;
 
     try {
+      const isMultipart = (req.headers['content-type'] ?? '').includes('multipart/form-data');
+
       const response = await axios({
         method: req.method as any,
         url: targetUrl,
-        data: req.body,
+        // multipart: pipe raw stream โดยตรง (req.body จะว่างเปล่าสำหรับ file upload)
+        data: isMultipart ? req : req.body,
         headers: {
           ...req.headers,
-          host: undefined, // ลบ host header เดิมออก
+          host: undefined,
         },
         params: req.query,
+        maxBodyLength: 25 * 1024 * 1024,    // 25 MB
+        maxContentLength: 25 * 1024 * 1024,
       });
 
       return res.status(response.status).json(response.data);

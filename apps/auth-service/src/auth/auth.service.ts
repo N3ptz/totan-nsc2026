@@ -13,6 +13,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class AuthService {
@@ -21,41 +22,96 @@ export class AuthService {
     @InjectRepository(Doctor) private doctorRepo: Repository<Doctor>,
     @InjectRepository(Parent) private parentRepo: Repository<Parent>,
     private jwtService: JwtService,
+    private emailService: EmailService,
   ) {}
+
+  private generateOtp(): string {
+    return String(Math.floor(100000 + Math.random() * 900000));
+  }
 
   // ─── REGISTER ────────────────────────────────────────
   async register(dto: RegisterDto) {
-    // เช็คว่า email ซ้ำมั้ย
     const exists = await this.userRepo.findOne({ where: { email: dto.email } });
     if (exists) throw new ConflictException('Email นี้ถูกใช้งานแล้ว');
 
-    // เข้ารหัส password ด้วย bcrypt (hash 12 รอบ)
     const passwordHash = await bcrypt.hash(dto.password, 12);
+    const otp = this.generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 นาที
 
-    // สร้าง user
     const user = this.userRepo.create({
       email: dto.email,
       passwordHash,
       role: dto.role,
-      status: UserStatus.ACTIVE,
+      status: UserStatus.UNVERIFIED,
+      verifyOtp: otp,
+      verifyOtpExpiresAt: expiresAt,
     });
     await this.userRepo.save(user);
 
-    // สร้าง profile ตาม role
     if (dto.role === UserRole.DOCTOR) {
-      const doctor = this.doctorRepo.create({ userId: user.id, fullName: dto.fullName });
-      await this.doctorRepo.save(doctor);
+      await this.doctorRepo.save(
+        this.doctorRepo.create({ userId: user.id, fullName: dto.fullName }),
+      );
     } else if (dto.role === UserRole.PARENT) {
-      const parent = this.parentRepo.create({
-        userId: user.id,
-        fullName: dto.fullName,
-        phone: dto.phone,
-        relationship: dto.relationship,
-      });
-      await this.parentRepo.save(parent);
+      await this.parentRepo.save(
+        this.parentRepo.create({
+          userId: user.id, fullName: dto.fullName,
+          phone: dto.phone, relationship: dto.relationship,
+        }),
+      );
     }
 
-    return { message: 'ลงทะเบียนสำเร็จ', userId: user.id };
+    // ส่ง OTP ทาง email (non-blocking — ไม่ให้ error email ทำให้ register fail)
+    this.emailService.sendVerifyOtp(dto.email, otp).catch(() => {});
+
+    return { message: 'ลงทะเบียนสำเร็จ กรุณายืนยัน email', userId: user.id };
+  }
+
+  // ─── VERIFY EMAIL ─────────────────────────────────────
+  async verifyEmail(email: string, otp: string) {
+    const user = await this.userRepo.findOne({ where: { email } });
+    if (!user) throw new BadRequestException('ไม่พบบัญชีนี้');
+
+    if (user.status === UserStatus.ACTIVE) {
+      return { message: 'ยืนยัน email แล้ว' };
+    }
+
+    if (!user.verifyOtp || user.verifyOtp !== otp) {
+      throw new BadRequestException('รหัส OTP ไม่ถูกต้อง');
+    }
+
+    if (new Date() > user.verifyOtpExpiresAt) {
+      throw new BadRequestException('รหัส OTP หมดอายุแล้ว กรุณาขอใหม่');
+    }
+
+    await this.userRepo.update(user.id, {
+      status: UserStatus.ACTIVE,
+      verifyOtp: null,
+      verifyOtpExpiresAt: null,
+    });
+
+    return { message: 'ยืนยัน email สำเร็จ' };
+  }
+
+  // ─── RESEND OTP ───────────────────────────────────────
+  async resendVerifyOtp(email: string) {
+    const user = await this.userRepo.findOne({ where: { email } });
+    if (!user) throw new BadRequestException('ไม่พบบัญชีนี้');
+    if (user.status === UserStatus.ACTIVE) {
+      return { message: 'ยืนยัน email แล้ว' };
+    }
+
+    const otp = this.generateOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await this.userRepo.update(user.id, {
+      verifyOtp: otp,
+      verifyOtpExpiresAt: expiresAt,
+    });
+
+    this.emailService.sendVerifyOtp(email, otp).catch(() => {});
+
+    return { message: 'ส่ง OTP ใหม่แล้ว กรุณาตรวจสอบ email' };
   }
 
   // ─── LOGIN ───────────────────────────────────────────
@@ -68,6 +124,9 @@ export class AuthService {
     const isMatch = await bcrypt.compare(dto.password, user.passwordHash);
     if (!isMatch) throw new UnauthorizedException('Email หรือ Password ไม่ถูกต้อง');
 
+    if (user.status === UserStatus.UNVERIFIED) {
+      throw new UnauthorizedException('กรุณายืนยัน email ก่อนเข้าสู่ระบบ');
+    }
     if (user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('บัญชีนี้ถูกระงับการใช้งาน');
     }

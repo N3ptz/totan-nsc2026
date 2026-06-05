@@ -291,10 +291,11 @@ function NewAssessmentPanel({
   const th = lang === "th";
   const [form, setForm] = useState({ heightCm: "", weightKg: "", clinicalNotes: "" });
   const [saving, setSaving] = useState(false);
+  const [savingStep, setSavingStep] = useState("");
   const [error, setError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [xrayPreview, setXrayPreview] = useState<string | null>(null);
-  const [xrayBase64, setXrayBase64] = useState<string>("");
+  const [xrayFile, setXrayFile] = useState<File | null>(null);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm(f => ({ ...f, [k]: e.target.value }));
@@ -302,23 +303,24 @@ function NewAssessmentPanel({
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      setXrayPreview(result);
-      setXrayBase64(result);
-    };
-    reader.readAsDataURL(file);
+    setXrayFile(file);
+    setXrayPreview(URL.createObjectURL(file));
   };
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!xrayBase64) { setError(th ? "กรุณาเลือกภาพ X-ray" : "Please select an X-ray image"); return; }
+    if (!xrayFile) { setError(th ? "กรุณาเลือกภาพ X-ray" : "Please select an X-ray image"); return; }
     setSaving(true); setError("");
     try {
+      // Step 1: upload ไฟล์ไป Supabase ก่อน → ได้ URL
+      setSavingStep(th ? "กำลังอัปโหลดภาพ..." : "Uploading image...");
+      const { data: uploaded } = await assessmentsApi.uploadXray(xrayFile);
+
+      // Step 2: สร้าง assessment พร้อม URL จริง
+      setSavingStep(th ? "กำลังบันทึก..." : "Saving...");
       const { data } = await assessmentsApi.create({
         childId: child.id,
-        xrayImageUrl: xrayBase64,
+        xrayImageUrl: uploaded.xrayImageUrl,
         heightCm: form.heightCm ? Number(form.heightCm) : undefined,
         weightKg: form.weightKg ? Number(form.weightKg) : undefined,
         clinicalNotes: form.clinicalNotes || undefined,
@@ -328,6 +330,7 @@ function NewAssessmentPanel({
       setError(err.response?.data?.message ?? (th ? "เกิดข้อผิดพลาด" : "Something went wrong"));
     } finally {
       setSaving(false);
+      setSavingStep("");
     }
   };
 
@@ -419,7 +422,7 @@ function NewAssessmentPanel({
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50"
             style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.3)" }}>
             {saving ? (
-              <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>{th ? "กำลังบันทึก..." : "Saving..."}</>
+              <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>{savingStep || (th ? "กำลังบันทึก..." : "Saving...")}</>
             ) : (
               <>{th ? "ส่งประเมิน AI →" : "Submit for AI Analysis →"}</>
             )}

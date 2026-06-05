@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Request, Response, NextFunction } from 'express';
 
 // PUBLIC routes ที่ไม่ต้อง login
-const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/health'];
+const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/health', '/auth/verify-email', '/auth/resend-verify'];
 
 @Injectable()
 export class JwtMiddleware implements NestMiddleware {

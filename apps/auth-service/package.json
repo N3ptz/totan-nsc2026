@@ -9,6 +9,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.600.0",
     "@nestjs/common": "^10.3.0",
     "@nestjs/config": "^3.2.0",
     "@nestjs/core": "^10.3.0",
@@ -24,11 +25,14 @@
     "pg": "^8.11.5",
     "reflect-metadata": "^0.2.1",
     "rxjs": "^7.8.1",
+    "nodemailer": "^6.9.13",
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.3.2",
     "@types/bcryptjs": "^2.4.6",
+    "@types/nodemailer": "^6.4.14",
+    "@types/multer": "^1.4.11",
     "@types/passport-jwt": "^4.0.1",
     "typescript": "^5.4.5"
   }
