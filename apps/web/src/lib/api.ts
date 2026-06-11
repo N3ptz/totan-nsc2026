@@ -90,6 +90,10 @@ export const assessmentsApi = {
   setFollowup: (id: string, date: string, notes?: string) =>
     apiClient.patch(`/assessments/${id}/followup`, { date, notes }),
 
+  // แพทย์ส่งผล + วันนัดติดตามให้ผู้ปกครอง (รวบรวมผลประเมิน → เมล)
+  notifyParent: (id: string, data: { followUpDate: string; followUpTime?: string; note?: string }) =>
+    apiClient.post<Assessment>(`/assessments/${id}/notify-parent`, data),
+
   mockAiResult: (id: string) =>
     apiClient.post<Assessment>(`/assessments/${id}/mock-ai`, {}),
 };
@@ -97,6 +101,7 @@ export const assessmentsApi = {
 // ── Recommendations ───────────────────────────────────────
 export const recommendationsApi = {
   mine: () => apiClient.get<Recommendation[]>('/recommendations/mine'),
+  sent: () => apiClient.get<Recommendation[]>('/recommendations/sent'),
   create: (data: { assessmentId: string; parentId: string; content: string }) =>
     apiClient.post<Recommendation>('/recommendations', data),
   markRead: (id: string) => apiClient.patch(`/recommendations/${id}/read`, {}),
@@ -130,6 +135,7 @@ export interface Assessment {
   boneAgeMonths?: number;
   confidence?: number;
   heatmapUrl?: string;
+  isMock?: boolean; // true = ผลจาก mock pipeline (ยังไม่ใช่ model จริง)
   riskFlag?: 'normal' | 'short_stature' | 'tall_stature' | 'advanced' | 'delayed';
   finalAdultHeightCm?: number;
   targetHeightCm?: number;
@@ -140,6 +146,7 @@ export interface Assessment {
   heightSdScore?: number;
   nextFollowupDate?: string;
   followupNotes?: string;
+  parentNotifiedAt?: string; // เวลาที่ส่งผลให้ผู้ปกครองล่าสุด (null = ยังไม่เคยส่ง)
   clinicalNotes?: string;
   createdAt: string;
 }

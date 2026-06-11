@@ -16,7 +16,8 @@ import { Parent } from './users/parent.entity';
       type: 'postgres',
       url: process.env.DATABASE_URL,
       entities: [User, Doctor, Parent],
-      synchronize: true, // ⚠️ dev เท่านั้น — สร้างตารางอัตโนมัติ
+      // ⚠️ สร้างตารางอัตโนมัติ — ปิดใน production ด้วย DB_SYNC=false แล้วใช้ migration แทน
+      synchronize: process.env.DB_SYNC !== 'false',
     }),
 
     AuthModule,

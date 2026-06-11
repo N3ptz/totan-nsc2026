@@ -3,6 +3,10 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
+  // fail-fast: ไม่มี secret = endpoint ภายใน (ai-result/upload-heatmap) เปิดโล่ง
+  if (!process.env.INTERNAL_SECRET) {
+    throw new Error('INTERNAL_SECRET ยังไม่ได้ตั้งค่า — copy .env.example เป็น .env แล้วกรอกก่อนรัน');
+  }
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const express = require('express');
   const app = await NestFactory.create(AppModule, { bodyParser: false });

@@ -1,7 +1,8 @@
 packages:
   - "apps/*"
   - "packages/*"
+  - "!apps/report-service" # ตัดออก — สร้าง PDF ฝั่ง web (หน้า /print) แทน ลบโฟลเดอร์นี้ทิ้งได้เลย
 allowBuilds:
   '@nestjs/core': true
   protobufjs: true
-  puppeteer: true
+  puppeteer: set this to true or false

@@ -132,6 +132,7 @@ class BoneAgePipeline:
             bmiPercentile=bmi_percentile,
             heightSdScore=height_sd_score,
             riskFlag=risk_flag,
+            isMock=True,  # ผลจำลอง — UI/รายงานต้องแสดงให้ชัดว่าไม่ใช่ผล AI จริง
         )
 
     @staticmethod

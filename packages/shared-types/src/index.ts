@@ -14,26 +14,45 @@ export interface Child {
   name: string;
   dateOfBirth: Date;
   sex: 'M' | 'F';
-  parentId: string;
+  parentId: string | null;
   doctorId: string;
+  ethnicity?: string;
+  heightCm?: number;
+  weightKg?: number;
+  fatherHeightCm?: number;
+  motherHeightCm?: number;
+  clinicalNotes?: string;
 }
 
 // ─── Assessment ──────────────────────────────────────────────
 export type AssessmentStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
+export type RiskFlag = 'normal' | 'short_stature' | 'tall_stature' | 'advanced' | 'delayed';
+
 export interface Assessment {
   id: string;
   childId: string;
+  doctorId: string;
   xrayImageUrl: string;
   status: AssessmentStatus;
+  heightCm?: number;
+  weightKg?: number;
   boneAgeMonths?: number;
-  boneAgeYears?: number;
   confidence?: number;
-  finalAdultHeightCm?: number;
-  percentile?: number;
   heatmapUrl?: string;
+  isMock?: boolean;
+  finalAdultHeightCm?: number;
+  targetHeightCm?: number;
+  heightPercentile?: number;
+  weightPercentile?: number;
+  bmi?: number;
+  bmiPercentile?: number;
+  heightSdScore?: number;
+  riskFlag?: RiskFlag;
+  nextFollowupDate?: Date;
+  followupNotes?: string;
+  clinicalNotes?: string;
   createdAt: Date;
-  completedAt?: Date;
 }
 
 // ─── Redis Events ────────────────────────────────────────────
@@ -41,12 +60,19 @@ export interface AssessmentCompletedEvent {
   assessmentId: string;
   childId: string;
   doctorId: string;
-  parentId: string;
 }
 
-export interface RecommendationCreatedEvent {
+export interface RecommendationSentEvent {
   recommendationId: string;
+  parentId: string;
+  doctorId: string;
+}
+
+export interface FollowupDueEvent {
   assessmentId: string;
   childId: string;
-  parentId: string;
+  doctorId: string;
+  parentId: string | null;
+  childName: string | null;
+  date: string; // YYYY-MM-DD
 }

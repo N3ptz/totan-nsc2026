@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
+import { randomInt } from 'crypto';
 
 import { User, UserRole, UserStatus } from '../users/user.entity';
 import { Doctor } from '../users/doctor.entity';
@@ -25,8 +26,11 @@ export class AuthService {
     private emailService: EmailService,
   ) {}
 
+  private static readonly MAX_OTP_ATTEMPTS = 5;
+
   private generateOtp(): string {
-    return String(Math.floor(100000 + Math.random() * 900000));
+    // ใช้ crypto.randomInt — Math.random() เดาได้ ไม่เหมาะกับรหัสยืนยัน
+    return String(randomInt(100000, 1000000));
   }
 
   // ─── REGISTER ────────────────────────────────────────
@@ -76,18 +80,26 @@ export class AuthService {
       return { message: 'ยืนยัน email แล้ว' };
     }
 
-    if (!user.verifyOtp || user.verifyOtp !== otp) {
-      throw new BadRequestException('รหัส OTP ไม่ถูกต้อง');
+    // หมดอายุ / กรอกผิดเกิน limit → ต้องขอรหัสใหม่
+    if (!user.verifyOtp || !user.verifyOtpExpiresAt || new Date() > user.verifyOtpExpiresAt) {
+      throw new BadRequestException('รหัส OTP หมดอายุแล้ว กรุณาขอใหม่');
+    }
+    if (user.verifyOtpAttempts >= AuthService.MAX_OTP_ATTEMPTS) {
+      throw new BadRequestException('กรอกรหัสผิดหลายครั้งเกินไป กรุณาขอรหัสใหม่');
     }
 
-    if (new Date() > user.verifyOtpExpiresAt) {
-      throw new BadRequestException('รหัส OTP หมดอายุแล้ว กรุณาขอใหม่');
+    if (user.verifyOtp !== otp) {
+      await this.userRepo.update(user.id, {
+        verifyOtpAttempts: user.verifyOtpAttempts + 1,
+      });
+      throw new BadRequestException('รหัส OTP ไม่ถูกต้อง');
     }
 
     await this.userRepo.update(user.id, {
       status: UserStatus.ACTIVE,
       verifyOtp: null,
       verifyOtpExpiresAt: null,
+      verifyOtpAttempts: 0,
     });
 
     return { message: 'ยืนยัน email สำเร็จ' };
@@ -107,6 +119,7 @@ export class AuthService {
     await this.userRepo.update(user.id, {
       verifyOtp: otp,
       verifyOtpExpiresAt: expiresAt,
+      verifyOtpAttempts: 0,
     });
 
     this.emailService.sendVerifyOtp(email, otp).catch(() => {});
@@ -126,6 +139,9 @@ export class AuthService {
 
     if (user.status === UserStatus.UNVERIFIED) {
       throw new UnauthorizedException('กรุณายืนยัน email ก่อนเข้าสู่ระบบ');
+    }
+    if (user.status === UserStatus.PENDING) {
+      throw new UnauthorizedException('บัญชีนี้กำลังรอการอนุมัติจากผู้ดูแลระบบ');
     }
     if (user.status !== UserStatus.ACTIVE) {
       throw new UnauthorizedException('บัญชีนี้ถูกระงับการใช้งาน');

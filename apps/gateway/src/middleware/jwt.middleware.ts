@@ -2,20 +2,33 @@ import { Injectable, NestMiddleware, UnauthorizedException } from '@nestjs/commo
 import { JwtService } from '@nestjs/jwt';
 import { Request, Response, NextFunction } from 'express';
 
-// PUBLIC routes ที่ไม่ต้อง login
-const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/health', '/auth/verify-email', '/auth/resend-verify'];
+// PUBLIC routes ที่ไม่ต้อง login (เทียบแบบ exact path เพื่อกัน /auth/login-xxx หลุด)
+const PUBLIC_PATHS = new Set([
+  '/auth/login',
+  '/auth/register',
+  '/auth/health',
+  '/auth/verify-email',
+  '/auth/resend-verify',
+]);
 
 @Injectable()
 export class JwtMiddleware implements NestMiddleware {
   constructor(private jwtService: JwtService) {}
 
   use(req: Request, res: Response, next: NextFunction) {
+    // ลบ x-user-* ที่ client แอบส่งมาทิ้งเสมอ — header พวกนี้ต้องมาจาก gateway เท่านั้น
+    delete req.headers['x-user-id'];
+    delete req.headers['x-user-role'];
+    delete req.headers['x-user-email'];
+    // internal secret ใช้เฉพาะ service-to-service ไม่รับจากภายนอก
+    delete req.headers['x-internal-secret'];
+
     // req.originalUrl คือ full path เสมอ ไม่ถูก Express/NestJS strip
     const path = (req.originalUrl ?? req.url ?? '').split('?')[0];
 
     // ให้ผ่านถ้าเป็น OPTIONS (CORS preflight) หรือ public route
     if (req.method === 'OPTIONS') return next();
-    if (PUBLIC_PATHS.some((p) => path.startsWith(p))) return next();
+    if (PUBLIC_PATHS.has(path)) return next();
 
     const authHeader = req.headers['authorization'];
     if (!authHeader?.startsWith('Bearer ')) {

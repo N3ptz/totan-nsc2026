@@ -54,3 +54,13 @@ coverage/
 
 # Project docs (contains credentials)
 docs/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# npm lockfile (โปรเจกต์นี้ใช้ pnpm)
+package-lock.json
+
+# Local tooling / agent (ไม่ต้องขึ้น git)
+.claude/
+.impeccable/

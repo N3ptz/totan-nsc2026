@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtMiddleware } from './middleware/jwt.middleware';
+import { RateLimitMiddleware } from './middleware/rate-limit.middleware';
 import { ProxyController } from './proxy/proxy.controller';
 
 @Module({
@@ -15,6 +16,15 @@ import { ProxyController } from './proxy/proxy.controller';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // rate limit เฉพาะ endpoint อ่อนไหว (login / register / OTP)
+    consumer
+      .apply(RateLimitMiddleware)
+      .forRoutes(
+        'auth/login',
+        'auth/register',
+        'auth/verify-email',
+        'auth/resend-verify',
+      );
     // ใช้ JWT middleware กับทุก route
     consumer.apply(JwtMiddleware).forRoutes('*');
   }

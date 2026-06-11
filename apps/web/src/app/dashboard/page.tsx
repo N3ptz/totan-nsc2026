@@ -6,6 +6,7 @@ import Link from "next/link";
 import { authApi, childrenApi, assessmentsApi, recommendationsApi, type Child, type Assessment, type Recommendation } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { DashboardSkeleton } from "@/components/Skeleton";
+import { ScrollFade } from "@/components/ScrollFade";
 
 interface User { id: string; email: string; role: string; profile?: { fullName?: string } }
 
@@ -56,7 +57,10 @@ export default function DashboardPage() {
           }
         } catch {}
         try {
-          const { data: recs } = await recommendationsApi.mine();
+          // หมอดูคำแนะนำที่ "ส่งแล้ว" / ผู้ปกครองดูที่ "ได้รับ"
+          const { data: recs } = data.role === "doctor"
+            ? await recommendationsApi.sent()
+            : await recommendationsApi.mine();
           setRecommendations(recs);
         } catch {}
       } catch {
@@ -74,7 +78,7 @@ export default function DashboardPage() {
 
   const today = new Date().toDateString();
   const todayCount  = assessments.filter(a => new Date(a.createdAt).toDateString() === today).length;
-  const pendingCount = assessments.filter(a => a.status === "PENDING" || a.status === "PROCESSING").length;
+  const pendingCount = assessments.filter(a => a.status === "pending" || a.status === "processing").length;
   const recCount    = isDoctor ? recommendations.length : recommendations.filter(r => !r.isRead).length;
 
   const bp = (v: number, max: number) => v === 0 ? 0 : Math.max(Math.min((v / max) * 100, 92), 6);
@@ -156,6 +160,7 @@ export default function DashboardPage() {
                 title={isDoctor ? td.noPatients : td.noChildren}
                 desc={isDoctor ? td.addHint : td.contactHint} />
             ) : (
+              <ScrollFade enabled={children.length > 5} maxHeight={336}>
               <div className="divide-y divide-border/40">
                 {children.slice(0, 8).map((child, i) => (
                   <Link key={child.id} href={`/dashboard/patients/${child.id}`}
@@ -180,6 +185,7 @@ export default function DashboardPage() {
                   </Link>
                 ))}
               </div>
+              </ScrollFade>
             )}
           </div>
         </div>

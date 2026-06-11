@@ -27,6 +27,17 @@ async def _upload_heatmap(heatmap_bytes: bytes, content_type: str = "image/png")
         return None
 
 
+async def _report_failure(assessment_id: str) -> None:
+    """แจ้ง patient-service ว่า pipeline ล้มเหลว — กัน assessment ค้าง PROCESSING ตลอดไป"""
+    try:
+        url = f"{settings.PATIENT_SERVICE_URL}/assessments/{assessment_id}/ai-failed"
+        async with httpx.AsyncClient(timeout=10) as client:
+            r = await client.post(url, headers={"x-internal-secret": settings.INTERNAL_SECRET})
+            r.raise_for_status()
+    except Exception as exc:
+        logger.error(f"Failed to report failure [{assessment_id}]: {exc}")
+
+
 async def _process_and_callback(req: PredictRequest) -> None:
     """
     Background task:
@@ -73,8 +84,9 @@ async def _process_and_callback(req: PredictRequest) -> None:
             logger.info(f"Assessment {req.assessmentId} completed")
 
     except Exception as exc:
-        # ไม่ crash server — patient-service จะ remain PROCESSING จนกว่าจะ retry / expire
+        # ไม่ crash server — แจ้ง patient-service ให้ mark เป็น FAILED แทนที่จะค้าง PROCESSING
         logger.error(f"Pipeline failed [{req.assessmentId}]: {exc}")
+        await _report_failure(req.assessmentId)
 
 
 @router.post("/predict", status_code=202)

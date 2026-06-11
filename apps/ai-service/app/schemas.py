@@ -32,3 +32,4 @@ class AiResult(BaseModel):
     bmiPercentile: float | None = None
     heightSdScore: float | None = None
     riskFlag: str = "normal"  # normal | short_stature | tall_stature | advanced | delayed
+    isMock: bool = False      # True = ผลจาก mock pipeline (model จริงยังไม่ load)

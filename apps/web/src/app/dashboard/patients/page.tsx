@@ -6,6 +6,7 @@ import Link from "next/link";
 import { childrenApi, authApi, type Child } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { PatientsSkeleton } from "@/components/Skeleton";
+import { ScrollFade } from "@/components/ScrollFade";
 
 function calcAge(dob: string) {
   const birth = new Date(dob);
@@ -161,6 +162,7 @@ export default function PatientsPage() {
               <span></span>
             </div>
 
+            <ScrollFade enabled={filtered.length > 5} maxHeight={336}>
             <div className="divide-y divide-border/40">
               {filtered.map((child, i) => {
                 const age = calcAge(child.dateOfBirth);
@@ -202,6 +204,7 @@ export default function PatientsPage() {
                 );
               })}
             </div>
+            </ScrollFade>
           </div>
         )}
       </div>

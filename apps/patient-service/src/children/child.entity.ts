@@ -2,6 +2,7 @@ import {
   Entity, PrimaryGeneratedColumn, Column,
   CreateDateColumn, UpdateDateColumn, DeleteDateColumn,
 } from 'typeorm';
+import { numericTransformer } from '../common/numeric.transformer';
 
 @Entity('children')
 export class Child {
@@ -28,17 +29,17 @@ export class Child {
   ethnicity: string;
 
   // ข้อมูลร่างกายเด็ก ณ วันที่เพิ่มเข้าระบบ
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, transformer: numericTransformer })
   heightCm: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, transformer: numericTransformer })
   weightKg: number;
 
   // ส่วนสูงบิดา-มารดา สำหรับคำนวณ Target Height
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, transformer: numericTransformer })
   fatherHeightCm: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, transformer: numericTransformer })
   motherHeightCm: number;
 
   @Column({ type: 'text', nullable: true })

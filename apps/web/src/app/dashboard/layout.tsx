@@ -22,6 +22,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const [user, setUser] = useState<SidebarUser | null>(null);
   const [ready, setReady] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // ปิด drawer อัตโนมัติเมื่อเปลี่ยนหน้า
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   useEffect(() => {
     if (!localStorage.getItem("token")) { router.replace("/login"); return; }
@@ -59,8 +63,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen flex bg-bg">
+      {/* ── Mobile: hamburger + backdrop ────────────────── */}
+      <button onClick={() => setMobileOpen(true)}
+        className="lg:hidden fixed top-4 left-4 z-50 w-10 h-10 rounded-xl glass-strong border border-border/60 flex items-center justify-center text-ink"
+        aria-label="Open menu"
+        style={{ display: mobileOpen ? "none" : undefined }}>
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+        </svg>
+      </button>
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+          onClick={() => setMobileOpen(false)} />
+      )}
+
       {/* ── Sidebar ─────────────────────────────────────── */}
-      <aside className="w-64 flex flex-col fixed inset-y-0 left-0 z-40 glass-strong border-r border-border/60">
+      <aside className={`w-64 flex flex-col fixed inset-y-0 left-0 z-40 glass-strong border-r border-border/60 transition-transform duration-300 lg:translate-x-0 ${
+        mobileOpen ? "translate-x-0 z-50" : "-translate-x-full"
+      }`}>
 
         {/* Logo */}
         <div className="px-5 py-4 flex items-center gap-3 border-b border-border/60">
@@ -146,7 +166,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* ── Content ─────────────────────────────────────── */}
-      <div className="flex-1 ml-64 min-h-screen">
+      <div className="flex-1 ml-0 lg:ml-64 min-h-screen">
         {children}
       </div>
     </div>

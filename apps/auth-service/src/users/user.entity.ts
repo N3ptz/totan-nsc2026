@@ -39,6 +39,10 @@ export class User {
   @Column({ type: 'timestamptz', nullable: true })
   verifyOtpExpiresAt: Date;
 
+  // นับจำนวนครั้งที่กรอก OTP ผิด — เกิน limit ต้องขอรหัสใหม่
+  @Column({ default: 0 })
+  verifyOtpAttempts: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

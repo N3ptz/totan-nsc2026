@@ -28,15 +28,18 @@ export class ProxyController {
     try {
       const isMultipart = (req.headers['content-type'] ?? '').includes('multipart/form-data');
 
+      // JSON body ถูก parse แล้ว re-serialize ใหม่ → byte length อาจไม่เท่าเดิม
+      // ต้องทิ้ง content-length เดิม ให้ axios คำนวณใหม่เอง (ยกเว้น multipart ที่ pipe stream ตรงๆ)
+      const forwardHeaders: Record<string, any> = { ...req.headers };
+      delete forwardHeaders.host;
+      if (!isMultipart) delete forwardHeaders['content-length'];
+
       const response = await axios({
         method: req.method as any,
         url: targetUrl,
         // multipart: pipe raw stream โดยตรง (req.body จะว่างเปล่าสำหรับ file upload)
         data: isMultipart ? req : req.body,
-        headers: {
-          ...req.headers,
-          host: undefined,
-        },
+        headers: forwardHeaders,
         params: req.query,
         maxBodyLength: 25 * 1024 * 1024,    // 25 MB
         maxContentLength: 25 * 1024 * 1024,

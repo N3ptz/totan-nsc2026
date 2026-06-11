@@ -24,8 +24,9 @@ totan-nsc2026/
 │   ├── auth-service/      🔐  จัดการ login / logout / สิทธิ์          :3001
 │   ├── patient-service/   👶  ข้อมูลเด็ก การประเมิน recommendation    :3002
 │   ├── ai-service/        🧠  วิเคราะห์ภาพ X-ray ด้วย AI (FastAPI)    :8000
-│   ├── report-service/    📄  สร้าง PDF รายงาน                        :3003
-│   └── notify-service/    🔔  ส่ง Email และ Push Notification          :3004
+│   └── notify-service/    🔔  ส่ง Email แจ้งผู้ปกครอง                   :3004
+│
+│   (PDF รายงานสร้างฝั่ง web ที่หน้า /print — ไม่มี report-service แล้ว)
 │
 ├── packages/
 │   └── shared-types/      📦  TypeScript types ที่ทุก service ใช้ร่วมกัน
@@ -88,13 +89,15 @@ pnpm install
 copy apps\auth-service\.env.example    apps\auth-service\.env
 copy apps\patient-service\.env.example apps\patient-service\.env
 copy apps\ai-service\.env.example      apps\ai-service\.env
-copy apps\report-service\.env.example  apps\report-service\.env
 copy apps\notify-service\.env.example  apps\notify-service\.env
 copy apps\gateway\.env.example         apps\gateway\.env
 copy apps\web\.env.example             apps\web\.env
 ```
 
 > ไฟล์ `.env` เก็บ password และ secret — ไม่ขึ้น git (อยู่ใน .gitignore แล้ว)
+
+> ⚠️ **สำคัญ:** ค่า `INTERNAL_SECRET` ต้องตั้งให้**ตรงกันทุก service** (auth, patient, ai, notify)
+> ใช้ยืนยันการคุยกันระหว่าง service — patient-service จะไม่ยอมรันถ้าไม่ได้ตั้งค่านี้
 
 ---
 
@@ -183,5 +186,5 @@ pnpm install        # install packages ใหม่ทุก service
 | คน | รับผิดชอบ | Services |
 |----|-----------|---------|
 | **Person A** | หน้าเว็บ + ประตูกลาง | `web` + `gateway` |
-| **Person B** | Backend ทั้งหมด + PDF + แจ้งเตือน | `auth-service` + `patient-service` + `report-service` + `notify-service` |
+| **Person B** | Backend ทั้งหมด + แจ้งเตือน | `auth-service` + `patient-service` + `notify-service` |
 | **Person C** | AI วิเคราะห์ X-ray | `ai-service` |

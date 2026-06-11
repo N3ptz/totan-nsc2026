@@ -1,8 +1,12 @@
-import { Controller, Post, Get, Patch, Body, Param, Request, UnauthorizedException, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Request, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AssessmentsService } from './assessments.service';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
+import { AiResultDto } from './dto/ai-result.dto';
+import { NotifyParentDto } from './dto/notify-parent.dto';
 import { StorageService } from '../storage/storage.service';
+import { InternalGuard } from '../common/internal.guard';
+import { getRequestUser, requireDoctor } from '../common/request-user';
 
 @Controller('assessments')
 export class AssessmentsController {
@@ -11,72 +15,87 @@ export class AssessmentsController {
     private storageService: StorageService,
   ) {}
 
-  // POST /assessments/upload-xray — อัปโหลดภาพ X-ray → คืน URL
+  // POST /assessments/upload-xray — แพทย์อัปโหลดภาพ X-ray → คืน URL
   @Post('upload-xray')
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
-  async uploadXray(@UploadedFile() file: Express.Multer.File) {
+  async uploadXray(@UploadedFile() file: Express.Multer.File, @Request() req: any) {
+    requireDoctor(req);
     if (!file) throw new BadRequestException('ไม่พบไฟล์');
     const url = await this.storageService.upload(file, 'xrays');
     return { xrayImageUrl: url };
   }
 
-  // POST /assessments/upload-heatmap — AI service อัปโหลด Grad-CAM heatmap → คืน URL
+  // POST /assessments/upload-heatmap — AI service อัปโหลด Grad-CAM heatmap (internal only)
   @Post('upload-heatmap')
+  @UseGuards(InternalGuard)
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 10 * 1024 * 1024 } }))
-  async uploadHeatmap(
-    @UploadedFile() file: Express.Multer.File,
-    @Request() req: any,
-  ) {
+  async uploadHeatmap(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('ไม่พบไฟล์');
-    const secret = req.headers['x-internal-secret'];
-    if (secret !== process.env.INTERNAL_SECRET) {
-      throw new UnauthorizedException('Internal endpoint');
-    }
     const url = await this.storageService.upload(file, 'heatmaps');
     return { heatmapUrl: url };
   }
 
-  // POST /assessments — แพทย์สร้างการประเมินใหม่
+  // POST /assessments — แพทย์สร้างการประเมินใหม่ (ต้องเป็นเจ้าของเคส)
   @Post()
   create(@Body() dto: CreateAssessmentDto, @Request() req: any) {
-    const doctorId = req.headers['x-user-id']; // Gateway inject หลัง verify JWT
-    return this.assessmentsService.create(dto, doctorId);
+    const { userId } = requireDoctor(req);
+    return this.assessmentsService.create(dto, userId);
   }
 
-  // POST /assessments/:id/ai-result — AI service เรียก endpoint นี้เพื่อบันทึกผล (internal only)
+  // POST /assessments/:id/ai-result — AI service บันทึกผล (internal only)
   @Post(':id/ai-result')
-  saveAiResult(@Param('id') id: string, @Body() result: any, @Request() req: any) {
-    const secret = req.headers['x-internal-secret'];
-    if (secret !== process.env.INTERNAL_SECRET) {
-      throw new UnauthorizedException('Internal endpoint');
-    }
+  @UseGuards(InternalGuard)
+  saveAiResult(@Param('id') id: string, @Body() result: AiResultDto) {
     return this.assessmentsService.saveAiResult(id, result);
   }
 
-  // GET /assessments/child/:childId — ดูประวัติทั้งหมดของเด็กคนนึง
+  // POST /assessments/:id/ai-failed — AI service แจ้ง pipeline ล้มเหลว (internal only)
+  @Post(':id/ai-failed')
+  @UseGuards(InternalGuard)
+  markFailed(@Param('id') id: string) {
+    return this.assessmentsService.markFailed(id);
+  }
+
+  // GET /assessments/child/:childId — ดูประวัติของเด็ก (แพทย์เจ้าของเคส / ผู้ปกครองของเด็ก)
   @Get('child/:childId')
-  findByChild(@Param('childId') childId: string) {
-    return this.assessmentsService.findByChild(childId);
+  findByChild(@Param('childId') childId: string, @Request() req: any) {
+    const user = getRequestUser(req);
+    return this.assessmentsService.findByChildAuthorized(childId, user);
   }
 
-  // GET /assessments/:id — ดูรายละเอียด
+  // GET /assessments/:id — ดูรายละเอียด (แพทย์เจ้าของเคส / ผู้ปกครองของเด็ก)
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.assessmentsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req: any) {
+    const user = getRequestUser(req);
+    return this.assessmentsService.findOneAuthorized(id, user);
   }
 
-  // POST /assessments/:id/mock-ai — จำลองผล AI (demo only)
+  // POST /assessments/:id/mock-ai — จำลองผล AI (เฉพาะแพทย์เจ้าของเคส, demo only)
   @Post(':id/mock-ai')
-  mockAi(@Param('id') id: string) {
-    return this.assessmentsService.mockAiResult(id);
+  mockAi(@Param('id') id: string, @Request() req: any) {
+    const { userId } = requireDoctor(req);
+    return this.assessmentsService.mockAiResult(id, userId);
   }
 
-  // PATCH /assessments/:id/followup — บันทึกวันติดตาม
+  // PATCH /assessments/:id/followup — บันทึกวันติดตาม (เฉพาะแพทย์เจ้าของเคส)
   @Patch(':id/followup')
   setFollowup(
     @Param('id') id: string,
     @Body() body: { date: Date; notes?: string },
+    @Request() req: any,
   ) {
-    return this.assessmentsService.setFollowup(id, body.date, body.notes);
+    const { userId } = requireDoctor(req);
+    return this.assessmentsService.setFollowup(id, userId, body.date, body.notes);
+  }
+
+  // POST /assessments/:id/notify-parent — แพทย์ส่งผล+วันนัดให้ผู้ปกครอง (เฉพาะแพทย์เจ้าของเคส)
+  @Post(':id/notify-parent')
+  notifyParent(
+    @Param('id') id: string,
+    @Body() dto: NotifyParentDto,
+    @Request() req: any,
+  ) {
+    const { userId } = requireDoctor(req);
+    return this.assessmentsService.notifyParent(id, userId, dto);
   }
 }

@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { childrenApi, assessmentsApi, type Child, type Assessment } from "@/lib/api";
-import type { AxiosResponse } from "axios";
+import { ScrollFade } from "@/components/ScrollFade";
 import { useI18n } from "@/lib/i18n";
 
 // ── Helpers ───────────────────────────────────────────────
@@ -22,12 +22,13 @@ function fmtDate(d: string, locale: string) {
   return new Date(d).toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" });
 }
 
-const RISK_LABEL: Record<string, { th: string; en: string; color: string }> = {
-  normal:        { th: "ปกติ",           en: "Normal",        color: "success" },
-  short_stature: { th: "เตี้ยกว่าเกณฑ์", en: "Short Stature", color: "warning" },
-  tall_stature:  { th: "สูงกว่าเกณฑ์",  en: "Tall Stature",  color: "primary" },
-  advanced:      { th: "อายุกระดูกมาก",  en: "Advanced",      color: "danger"  },
-  delayed:       { th: "อายุกระดูกน้อย", en: "Delayed",       color: "warning" },
+// cls ต้องเป็น class เต็มๆ — Tailwind JIT ไม่ generate class ที่ประกอบ string ตอน runtime
+const RISK_LABEL: Record<string, { th: string; en: string; cls: string }> = {
+  normal:        { th: "ปกติ",           en: "Normal",        cls: "bg-success/10 text-success" },
+  short_stature: { th: "เตี้ยกว่าเกณฑ์", en: "Short Stature", cls: "bg-warning/10 text-warning" },
+  tall_stature:  { th: "สูงกว่าเกณฑ์",  en: "Tall Stature",  cls: "bg-primary/10 text-primary" },
+  advanced:      { th: "อายุกระดูกมาก",  en: "Advanced",      cls: "bg-danger/10 text-danger"   },
+  delayed:       { th: "อายุกระดูกน้อย", en: "Delayed",       cls: "bg-warning/10 text-warning" },
 };
 
 // ── Growth Chart (SVG) ────────────────────────────────────
@@ -35,7 +36,8 @@ function GrowthChart({ assessments, lang }: { assessments: Assessment[]; lang: s
   const th = lang === "th";
   const completed = assessments
     .filter(a => a.heightCm && a.status === "completed")
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .slice(-5); // เอา 5 ครั้งล่าสุดพอ — กราฟไม่รก
 
   if (completed.length < 2) return (
     <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -126,7 +128,8 @@ function FahThChart({ assessments, lang }: { assessments: Assessment[]; lang: st
   const th = lang === "th";
   const data = assessments
     .filter(a => a.status === "completed" && a.finalAdultHeightCm)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .slice(-5); // เอา 5 ครั้งล่าสุดพอ — กราฟไม่รก
 
   if (data.length === 0) return (
     <div className="flex flex-col items-center justify-center py-10 text-center">
@@ -615,14 +618,51 @@ function ChildSettingsPanel({
 
 // ── Assessment Detail Panel ───────────────────────────────
 function AssessmentDetailPanel({
-  assessment, child, chronAgeMonths, onClose, lang,
+  assessment, child, chronAgeMonths, onClose, onUpdated, lang, isDoctor,
 }: {
-  assessment: Assessment; child: Child; chronAgeMonths: number; onClose: () => void; lang: string;
+  assessment: Assessment; child: Child; chronAgeMonths: number; onClose: () => void; onUpdated?: (a: Assessment) => void; lang: string; isDoctor: boolean;
 }) {
   const th = lang === "th";
   const boneAge = Number(assessment.boneAgeMonths ?? 0);
   const deviation = boneAge - chronAgeMonths;
   const isMock = !assessment.heatmapUrl || assessment.heatmapUrl.startsWith("mock://");
+
+  // ฟอร์ม "ส่งผลให้ผู้ปกครอง" (เฉพาะแพทย์ + ผลต้องเสร็จ + เด็กต้อง link บัญชีผู้ปกครองแล้ว)
+  const completed = assessment.status === "completed";
+  const [notifiedAt, setNotifiedAt] = useState<string | null>(assessment.parentNotifiedAt ?? null);
+  const [editing, setEditing] = useState(!assessment.parentNotifiedAt); // ยังไม่เคยส่ง → เปิดฟอร์มเลย
+  const [fuDate, setFuDate] = useState(
+    assessment.nextFollowupDate ? String(assessment.nextFollowupDate).slice(0, 10) : "",
+  );
+  const [fuTime, setFuTime] = useState("");
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sendStatus, setSendStatus] = useState<"idle" | "sent" | "error">("idle");
+
+  const fmtSentAt = (s: string) =>
+    new Date(s).toLocaleString(th ? "th-TH" : "en-US", {
+      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+
+  const sendToParent = async () => {
+    if (!fuDate || !child.parentId) return;
+    setSending(true); setSendStatus("idle");
+    try {
+      const { data } = await assessmentsApi.notifyParent(assessment.id, {
+        followUpDate: fuDate,
+        followUpTime: fuTime || undefined,
+        note: note.trim() || undefined,
+      });
+      setNotifiedAt(data?.parentNotifiedAt ?? new Date().toISOString());
+      setEditing(false);
+      setSendStatus("sent");
+      if (data) onUpdated?.(data); // อัปเดต list + panel ให้ followup/สถานะเด้งเอง ไม่ต้อง refresh
+    } catch {
+      setSendStatus("error");
+    } finally {
+      setSending(false);
+    }
+  };
 
   const rows: { label: string; value: string; highlight?: boolean }[] = [
     { label: th ? "อายุกระดูก" : "Bone Age",
@@ -671,8 +711,13 @@ function AssessmentDetailPanel({
               {new Date(assessment.createdAt).toLocaleDateString(th ? "th-TH" : "en-US", { year: "numeric", month: "long", day: "numeric" })}
             </p>
           </div>
+          {assessment.isMock && (
+            <span className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-warning/10 text-warning flex-shrink-0">
+              {th ? "ผลจำลอง" : "Simulated"}
+            </span>
+          )}
           {assessment.riskFlag && RISK_LABEL[assessment.riskFlag] && (
-            <span className={`text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-${RISK_LABEL[assessment.riskFlag].color}/10 text-${RISK_LABEL[assessment.riskFlag].color} flex-shrink-0`}>
+            <span className={`text-[11px] font-body font-semibold px-2.5 py-1 rounded-full ${RISK_LABEL[assessment.riskFlag].cls} flex-shrink-0`}>
               {th ? RISK_LABEL[assessment.riskFlag].th : RISK_LABEL[assessment.riskFlag].en}
             </span>
           )}
@@ -774,6 +819,134 @@ function AssessmentDetailPanel({
               )}
             </div>
           )}
+
+          {/* ส่งผลให้ผู้ปกครอง (เฉพาะแพทย์) */}
+          {isDoctor && (
+            <div className="rounded-xl border border-border/40 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+                </svg>
+                <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide">
+                  {th ? "ส่งผลให้ผู้ปกครอง" : "Notify Parent"}
+                </p>
+              </div>
+
+              {!child.parentId ? (
+                <p className="font-body text-xs text-muted">
+                  {th
+                    ? "เด็กคนนี้ยังไม่ได้ผูกบัญชีผู้ปกครอง — เพิ่มอีเมลผู้ปกครองได้ที่ตั้งค่าข้อมูลผู้ป่วย"
+                    : "No parent account linked yet — add the parent's email in patient settings."}
+                </p>
+              ) : !completed ? (
+                <p className="font-body text-xs text-muted">
+                  {th
+                    ? "ผลการประเมินยังไม่เสร็จ — รอ AI วิเคราะห์ให้เสร็จก่อนจึงจะส่งได้"
+                    : "Assessment not completed yet — wait for the AI result before sending."}
+                </p>
+              ) : notifiedAt && !editing ? (
+                <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-success flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                    </svg>
+                    <p className="font-body text-xs font-semibold text-success">
+                      {th ? "ส่งผลให้ผู้ปกครองแล้ว" : "Sent to parent"}
+                    </p>
+                  </div>
+                  <p className="font-body text-[11px] text-muted">
+                    {th ? "ส่งล่าสุดเมื่อ " : "Last sent "}{fmtSentAt(notifiedAt)}
+                  </p>
+                  <button
+                    onClick={() => { setEditing(true); setSendStatus("idle"); }}
+                    className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                    </svg>
+                    {th ? "แก้ไข / ส่งใหม่" : "Edit / Resend"}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {notifiedAt && (
+                    <p className="font-body text-[11px] text-warning">
+                      {th ? "กำลังแก้ไขเพื่อส่งใหม่ — ส่งล่าสุดเมื่อ " : "Editing to resend — last sent "}{fmtSentAt(notifiedAt)}
+                    </p>
+                  )}
+                  <p className="font-body text-xs text-muted leading-relaxed">
+                    {th
+                      ? "ระบบจะรวบรวมผลการประเมิน (อายุกระดูก ส่วนสูง การแปลผล) พร้อมวันนัดติดตาม ส่งเป็นอีเมลถึงผู้ปกครอง"
+                      : "The assessment summary (bone age, height, interpretation) and the follow-up date will be emailed to the parent."}
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-body text-[11px] font-semibold text-ink">
+                        {th ? "วันนัดติดตาม *" : "Follow-up date *"}
+                      </label>
+                      <input
+                        type="date"
+                        value={fuDate}
+                        onChange={(e) => { setFuDate(e.target.value); setSendStatus("idle"); }}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 font-body"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-body text-[11px] font-semibold text-ink">
+                        {th ? "เวลา (ไม่บังคับ)" : "Time (optional)"}
+                      </label>
+                      <input
+                        type="time"
+                        value={fuTime}
+                        onChange={(e) => { setFuTime(e.target.value); setSendStatus("idle"); }}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 font-body"
+                      />
+                    </div>
+                  </div>
+                  <textarea
+                    value={note}
+                    onChange={(e) => { setNote(e.target.value); setSendStatus("idle"); }}
+                    rows={3}
+                    placeholder={th ? "ข้อความ/คำแนะนำถึงผู้ปกครอง (ไม่บังคับ) — โภชนาการ การออกกำลังกาย การนอน..." : "Message to parent (optional)..."}
+                    className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none font-body"
+                  />
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {sendStatus === "sent" && (
+                        <span className="font-body text-xs text-success">
+                          {th ? "✓ ส่งให้ผู้ปกครองแล้ว" : "✓ Sent to parent"}
+                        </span>
+                      )}
+                      {sendStatus === "error" && (
+                        <span className="font-body text-xs text-danger">
+                          {th ? "ส่งไม่สำเร็จ ลองใหม่อีกครั้ง" : "Failed to send, please retry"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {notifiedAt && (
+                        <button
+                          onClick={() => { setEditing(false); setSendStatus("idle"); }}
+                          className="px-3 py-2 rounded-xl text-xs font-body font-semibold text-muted hover:text-ink hover:bg-border/40 transition-colors">
+                          {th ? "ยกเลิก" : "Cancel"}
+                        </button>
+                      )}
+                      <button
+                        onClick={sendToParent}
+                        disabled={sending || !fuDate}
+                        className="px-4 py-2 rounded-xl text-xs font-body font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-40 disabled:translate-y-0"
+                        style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" }}>
+                        {sending
+                          ? (th ? "กำลังส่ง..." : "Sending...")
+                          : notifiedAt
+                            ? (th ? "ส่งใหม่อีกครั้ง" : "Resend")
+                            : (th ? "ส่งผล + วันนัดให้ผู้ปกครอง" : "Send to parent")}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>
@@ -798,6 +971,34 @@ export default function PatientDetailPage() {
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
+  // กัน setState หลัง unmount ระหว่าง poll
+  // ⚠️ ต้อง set true ตอน mount ด้วย — ไม่งั้น StrictMode (dev) double-invoke แล้วค้างเป็น false
+  // ทำให้ polling ทั้งหมดเป็นหมัน (frontend ไม่อัปเดตเอง ต้อง refresh)
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+
+  // AI ตอบ 202 แล้วทำงาน background — poll สถานะจนกว่าจะ completed/failed (สูงสุด ~75 วิ)
+  const pollAssessment = (assessmentId: string, onDone?: () => void) => {
+    let tries = 0;
+    const tick = async () => {
+      if (!alive.current) return;
+      tries++;
+      let terminal = false;
+      try {
+        const { data } = await assessmentsApi.get(assessmentId);
+        if (!alive.current) return;
+        setAssessments(prev => prev.map(a => a.id === assessmentId ? data : a));
+        terminal = data.status === "completed" || data.status === "failed";
+      } catch {}
+      if (terminal || tries >= 30) { onDone?.(); return; }
+      setTimeout(tick, 2500);
+    };
+    setTimeout(tick, 2500);
+  };
+
   useEffect(() => {
     if (!localStorage.getItem("token")) { router.replace("/login"); return; }
     try {
@@ -819,6 +1020,21 @@ export default function PatientDetailPage() {
       }
     })();
   }, [id, router]);
+
+  // Auto-refresh: ระหว่างมี assessment ที่ AI กำลังประมวลผล (pending/processing)
+  // ดึงข้อมูลซ้ำทุก 3 วิ จนกว่าจะ completed/failed — ผู้ใช้ไม่ต้องกด refresh เอง
+  // (ครอบคลุมกรณีเปิดหน้ามาแล้วมีงานค้าง หรือ AI ใช้เวลานานกว่า poll ตอนสร้าง)
+  useEffect(() => {
+    const hasPending = assessments.some(a => a.status === "pending" || a.status === "processing");
+    if (!hasPending) return;
+    const timer = setInterval(async () => {
+      try {
+        const { data } = await assessmentsApi.listByChild(id);
+        if (alive.current) setAssessments(data);
+      } catch {}
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [assessments, id]);
 
   if (loading) return (
     <div className="min-h-screen bg-bg flex items-center justify-center">
@@ -854,13 +1070,15 @@ export default function PatientDetailPage() {
   const simulate = async (assessmentId: string) => {
     setSimulating(assessmentId);
     try {
-      const { data } = await assessmentsApi.mockAiResult(assessmentId);
-      setAssessments(prev => prev.map(a => a.id === assessmentId ? data : a));
+      // mock-ai ตอบกลับทันที (ผลจริงมาทาง callback ทีหลัง) → poll จนกว่า AI จะเสร็จ
+      await assessmentsApi.mockAiResult(assessmentId);
+      pollAssessment(assessmentId, () => { if (alive.current) setSimulating(null); });
     } catch {
       // Refresh from server in case DB updated but response failed (e.g. Redis down)
       const { data: refreshed } = await assessmentsApi.listByChild(id).catch(() => ({ data: null }));
       if (refreshed) setAssessments(refreshed);
-    } finally { setSimulating(null); }
+      setSimulating(null);
+    }
   };
 
   const statusCfg: Record<string, { label: string; cls: string }> = {
@@ -956,7 +1174,7 @@ export default function PatientDetailPage() {
               icon="🔬" color="primary"
               label={th ? "การประเมินทั้งหมด" : "Total Assessments"}
               value={String(assessments.length)}
-              sub={assessments.filter(a => a.status === "COMPLETED").length + (th ? " เสร็จสิ้น" : " completed")}
+              sub={assessments.filter(a => a.status === "completed").length + (th ? " เสร็จสิ้น" : " completed")}
             />
             <StatCard
               icon="🦴" color="accent"
@@ -1031,6 +1249,7 @@ export default function PatientDetailPage() {
               )}
             </div>
           ) : (
+            <ScrollFade enabled={assessments.length > 5} maxHeight={560}>
             <div className="divide-y divide-border/40">
               {assessments.map((a, i) => {
                 const cfg = statusCfg[a.status] ?? statusCfg.pending;
@@ -1050,8 +1269,13 @@ export default function PatientDetailPage() {
                             {cfg.label}
                           </span>
                           {risk && (
-                            <span className={`inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-${risk.color}/10 text-${risk.color}`}>
+                            <span className={`inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full ${risk.cls}`}>
                               {th ? risk.th : risk.en}
+                            </span>
+                          )}
+                          {a.isMock && (
+                            <span className="inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-warning/10 text-warning">
+                              {th ? "ผลจำลอง" : "Simulated"}
                             </span>
                           )}
                           {isDoctor && (a.status === "pending" || a.status === "failed") && (
@@ -1069,16 +1293,26 @@ export default function PatientDetailPage() {
                           <span className="font-body text-xs text-muted ml-auto">
                             {fmtDate(a.createdAt, th ? "th-TH" : "en-US")}
                           </span>
-                          {isDoctor && a.status === "completed" && (
-                            <button
-                              onClick={() => setSelectedAssessment(a)}
-                              className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
-                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              </svg>
-                              {th ? "รายละเอียด" : "Details"}
-                            </button>
+                          {a.status === "completed" && (
+                            <>
+                              <button
+                                onClick={() => setSelectedAssessment(a)}
+                                className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                {th ? "รายละเอียด" : "Details"}
+                              </button>
+                              <button
+                                onClick={() => window.open(`/print/${child.id}/${a.id}`, "_blank", "noopener,noreferrer")}
+                                className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-success/10 text-success hover:bg-success/20 transition-colors">
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+                                </svg>
+                                {th ? "พิมพ์รายงาน" : "Print Report"}
+                              </button>
+                            </>
                           )}
                         </div>
 
@@ -1104,12 +1338,18 @@ export default function PatientDetailPage() {
                             📅 {th ? "นัดติดตาม:" : "Follow-up:"} {fmtDate(String(a.nextFollowupDate), th ? "th-TH" : "en-US")}
                           </p>
                         )}
+                        {isDoctor && a.parentNotifiedAt && (
+                          <p className="font-body text-xs text-success mt-1.5">
+                            ✓ {th ? "ส่งให้ผู้ปกครองแล้ว" : "Sent to parent"}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
                 );
               })}
             </div>
+            </ScrollFade>
           )}
         </section>
       </div>
@@ -1167,6 +1407,7 @@ export default function PatientDetailPage() {
           onSaved={(a) => {
             setAssessments(prev => [a, ...prev]);
             setShowNew(false);
+            pollAssessment(a.id); // ตามผล AI จนเสร็จโดยไม่ต้อง refresh เอง
           }}
         />
       )}
@@ -1191,7 +1432,12 @@ export default function PatientDetailPage() {
           child={child}
           chronAgeMonths={ageMonths}
           onClose={() => setSelectedAssessment(null)}
+          onUpdated={(a) => {
+            setAssessments(prev => prev.map(x => x.id === a.id ? a : x)); // อัปเดตภาพรวม/ลิสต์
+            setSelectedAssessment(a);                                      // อัปเดต panel ที่เปิดอยู่
+          }}
           lang={lang}
+          isDoctor={isDoctor}
         />
       )}
     </div>

@@ -5,6 +5,7 @@ services:
   postgres-auth:
     image: postgres:16-alpine
     container_name: totan-postgres-auth
+    restart: unless-stopped
     environment:
       POSTGRES_USER: totan
       POSTGRES_PASSWORD: totan_secret
@@ -13,12 +14,18 @@ services:
       - "5432:5432"
     volumes:
       - pgdata-auth:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U totan -d totan_auth"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - totan-net
 
   postgres-patient:
     image: postgres:16-alpine
     container_name: totan-postgres-patient
+    restart: unless-stopped
     environment:
       POSTGRES_USER: totan
       POSTGRES_PASSWORD: totan_secret
@@ -27,6 +34,11 @@ services:
       - "5433:5432"
     volumes:
       - pgdata-patient:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U totan -d totan_patient"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - totan-net
 
@@ -34,10 +46,16 @@ services:
   redis:
     image: redis:7-alpine
     container_name: totan-redis
+    restart: unless-stopped
     ports:
       - "6379:6379"
     volumes:
       - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - totan-net
 
