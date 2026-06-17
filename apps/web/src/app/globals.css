@@ -148,6 +148,15 @@
 @keyframes glow-pulse     { 0%,100% { opacity: 0.45; } 50% { opacity: 0.85; } }
 @keyframes twinkle        { 0%,100% { opacity: 0.15; transform: scale(0.8); } 50% { opacity: 0.9; transform: scale(1.25); } }
 @keyframes bob            { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-10px) rotate(2deg); } }
+/* roadmap step scenes */
+@keyframes hf-drop        { 0% { transform: translateY(8px); opacity: 0; } 20% { transform: translateY(0); opacity: 1; } 84% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(8px); opacity: 0; } }
+@keyframes hf-progress    { 0%,14% { width: 0%; } 62%,86% { width: 100%; } 100% { width: 0%; } }
+@keyframes hf-pop         { 0% { opacity: 0; transform: translateY(5px); } 18% { opacity: 0; transform: translateY(5px); } 40%,88% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(5px); } }
+@keyframes hf-draw        { 0%,16% { transform: scaleX(0); } 60%,100% { transform: scaleX(1); } }
+@keyframes hf-scan        { 0% { top: 6%; opacity: 0; } 12%,88% { opacity: 1; } 50% { top: 90%; } 100% { top: 6%; opacity: 0; } }
+@keyframes hf-roam        { 0% { left: 0%; } 100% { left: 100%; } }
+@keyframes hf-dash        { to { stroke-dashoffset: -38; } }
+@keyframes draw-line      { to { stroke-dashoffset: 0; } }
 
 /* ─── Utilities ──────────────────────────────────────── */
 @layer utilities {
@@ -168,6 +177,13 @@
   .animate-spin-slow   { animation: spin-slow 14s linear infinite; }
   .animate-rise        { animation: rise-in 0.7s cubic-bezier(0.16,1,0.3,1) both; }
   .animate-glow        { animation: glow-pulse 4s ease-in-out infinite; }
+  /* roadmap step scenes */
+  .animate-hf-drop     { animation: hf-drop 5.5s ease-in-out infinite; }
+  .animate-hf-progress { animation: hf-progress 5.5s ease-in-out infinite; }
+  .animate-hf-pop      { animation: hf-pop 5.5s ease-in-out infinite; }
+  .animate-hf-draw     { animation: hf-draw 5.5s ease-in-out infinite; transform-origin: left; }
+  .animate-hf-scan     { animation: hf-scan 5s ease-in-out infinite; }
+  .animate-hf-dash     { animation: hf-dash 1.6s linear infinite; }
 
   /* Animated mesh-gradient text */
   .text-gradient {

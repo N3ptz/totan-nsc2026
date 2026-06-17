@@ -64,3 +64,8 @@ package-lock.json
 # Local tooling / agent (ไม่ต้องขึ้น git)
 .claude/
 .impeccable/
+.agents/
+skills-lock.json
+
+# DB session scratch files (อาจมี credential) — ไม่ขึ้น git
+*.session.sql

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { NavSkeleton, HeroSkeleton, FeaturesSkeleton } from "@/components/Skeleton";
+import HeroHand from "@/components/HeroHand";
+import AiPipeline from "@/components/AiPipeline";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Session { name: string; role: string }
@@ -52,6 +54,24 @@ function useCountUp(target: number, duration = 1400) {
   return { ref, val };
 }
 
+/** Custom smooth scroll with a controllable (slower) duration. */
+function smoothScrollTo(targetY: number, duration = 1200) {
+  const html = document.documentElement;
+  const startY = window.scrollY;
+  const dist = targetY - startY;
+  const start = performance.now();
+  const prev = html.style.scrollBehavior;
+  html.style.scrollBehavior = "auto"; // bypass CSS smooth so easing is ours
+  const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const step = (now: number) => {
+    const t = Math.min((now - start) / duration, 1);
+    window.scrollTo(0, startY + dist * ease(t));
+    if (t < 1) requestAnimationFrame(step);
+    else html.style.scrollBehavior = prev;
+  };
+  requestAnimationFrame(step);
+}
+
 // ── Root ───────────────────────────────────────────────────────────────────────
 export default function Home() {
   const { theme, toggle: toggleTheme } = useTheme();
@@ -60,20 +80,40 @@ export default function Home() {
   const [session, setSession] = useState<Session | null>(null);
   const [mounted, setMounted] = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
 
   useReveal(mounted);
 
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (videoRef.current) videoRef.current.playbackRate = 0.75;
-  }, []);
-
-  useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40);
     window.addEventListener("scroll", fn, { passive: true });
     return () => window.removeEventListener("scroll", fn);
+  }, []);
+
+  // Slow, controlled smooth-scroll for in-page anchor links (e.g. nav → #ai).
+  useEffect(() => {
+    const onClick = (e: MouseEvent) => {
+      const a = (e.target as HTMLElement)?.closest?.('a[href^="#"]') as HTMLAnchorElement | null;
+      const href = a?.getAttribute("href");
+      if (!href || href === "#") return;
+      const el = document.querySelector(href);
+      if (!el) return;
+      e.preventDefault();
+      // For #ai, land exactly where the hand is fully visible (centred → opacity 100%).
+      const hand = href === "#ai" ? document.querySelector<HTMLElement>("[data-aihand]") : null;
+      let y: number;
+      if (hand) {
+        const hr = hand.getBoundingClientRect();
+        y = hr.top + window.scrollY + hr.height / 2 - window.innerHeight / 2;
+      } else {
+        y = el.getBoundingClientRect().top + window.scrollY - 64; // clear fixed navbar
+      }
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { window.scrollTo(0, y); return; }
+      smoothScrollTo(y, 1400);
+    };
+    document.addEventListener("click", onClick);
+    return () => document.removeEventListener("click", onClick);
   }, []);
 
   useEffect(() => {
@@ -102,6 +142,7 @@ export default function Home() {
   }, []);
 
   const th = lang === "th";
+  const dark = theme === "dark";
 
   if (!mounted) return (
     <div className="min-h-screen bg-[#04293f] overflow-x-hidden">
@@ -135,6 +176,7 @@ export default function Home() {
 
         <nav aria-label="Primary navigation" className="hidden md:flex items-center gap-1">
           {[
+            { label: th ? "เบื้องหลัง AI" : "The AI",      href: "#ai" },
             { label: th ? "วิธีใช้งาน" : "How It Works", href: "#how" },
             { label: th ? "สำหรับใคร"  : "Who It's For",  href: "#who" },
             { label: th ? "เกี่ยวกับ"  : "About",          href: "#about" },
@@ -178,86 +220,76 @@ export default function Home() {
         <section
           ref={heroRef}
           aria-labelledby="hero-heading"
-          className="relative min-h-screen flex flex-col items-center justify-center px-6 text-center overflow-hidden"
-          style={{ background: "linear-gradient(165deg, #04293f 0%, #075985 35%, #0EA5E9 75%, #38BDF8 100%)" }}
+          className="relative min-h-[100svh] flex items-center px-6 overflow-hidden"
+          style={{ background: "linear-gradient(150deg, #04293f 0%, #075985 45%, #0EA5E9 100%)" }}
         >
-          {/* Video background */}
-          <video
-            ref={videoRef}
-            autoPlay
-            muted
-            loop
-            playsInline
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ zIndex: 0, willChange: "transform", filter: "blur(0px)" }}
-          >
-            <source src="/LandPageVid1.mp4" type="video/mp4" />
-          </video>
-          {/* Dark overlay to ensure readability */}
-          <div className="absolute inset-0" style={{ background: "linear-gradient(165deg, rgba(2,20,35,0.95) 0%, rgba(4,55,90,0.92) 35%, rgba(10,110,160,0.82) 75%, rgba(30,140,190,0.75) 100%)", zIndex: 1 }} />
+          {/* Left-weighted overlay keeps the copy readable; the hand glows at right. */}
+          <div className="absolute inset-0" style={{ zIndex: 1, background: "linear-gradient(100deg, rgba(3,20,34,0.92) 0%, rgba(3,20,34,0.66) 38%, rgba(3,20,34,0.30) 68%, rgba(3,20,34,0.12) 100%)" }} />
+          <div className="absolute inset-0" style={{ zIndex: 1, background: "linear-gradient(180deg, rgba(2,16,28,0.40) 0%, transparent 26%, transparent 70%, rgba(2,16,28,0.50) 100%)" }} />
           <AuroraField />
-
-          {/* Floating particles */}
           <Particles />
 
-          <div className="relative z-10 max-w-4xl mx-auto space-y-8 pt-24 pb-20">
-            {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-body font-semibold text-white/90 animate-fade-up"
-              style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(10px)" }}>
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
-              </span>
-              AI-Powered · Greulich &amp; Pyle Standard
-            </div>
-
-            {/* Heading */}
-            <h1 id="hero-heading"
-              className="font-display font-bold text-white leading-[1.05] animate-fade-up animate-delay-100"
-              style={{ fontSize: "clamp(2.75rem, 7vw, 5.5rem)", textWrap: "balance", letterSpacing: "-0.03em" }}>
-              {th ? (
-                <>ประเมินอายุกระดูก<br />
-                <span className="text-gradient" style={{ filter: "brightness(1.25)" }}>ด้วย AI</span>{" "}
-                สำหรับเด็กไทย</>
-              ) : (
-                <>Bone Age Assessment<br />
-                <span className="text-gradient" style={{ filter: "brightness(1.25)" }}>Powered by AI</span>{" "}
-                for Thai Children</>
-              )}
-            </h1>
-
-            <p className="font-body text-white/75 mx-auto animate-fade-up animate-delay-200"
-              style={{ fontSize: "clamp(1rem, 2vw, 1.2rem)", maxWidth: "52ch", lineHeight: 1.7 }}>
-              {th
-                ? "แพทย์อัปโหลด X-ray มือซ้าย AI วิเคราะห์ตามมาตรฐาน Greulich & Pyle ส่งผลและ recommendation ถึงผู้ปกครองได้ใน 2 นาที"
-                : "Upload a left-hand X-ray. AI analyzes against the Greulich & Pyle atlas. Send results and a recommendation to parents within 2 minutes."}
-            </p>
-
-            {/* CTA */}
-            <div className="flex flex-wrap items-center justify-center gap-3 animate-fade-up animate-delay-300">
-              <Link href={session ? "/dashboard" : "/login"}
-                className="group relative inline-flex items-center gap-2.5 font-body font-semibold text-white px-8 py-4 rounded-2xl transition-all hover:-translate-y-0.5 active:scale-[0.97] overflow-hidden"
-                style={{ background: "linear-gradient(120deg,#EA6C49,#F59E0B)", boxShadow: "0 10px 30px rgba(234,108,73,0.45)", fontSize: "1rem" }}>
-                <span className="shine relative z-10 flex items-center gap-2.5">
-                  {session ? (th ? "กลับสู่ Dashboard" : "Back to Dashboard") : (th ? "เริ่มใช้งานฟรี" : "Start for Free")}
-                  <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+          <div className="relative z-10 w-full max-w-7xl mx-auto grid lg:grid-cols-[1.05fr_0.95fr] items-center gap-8 lg:gap-6 pt-24 pb-24">
+            {/* ── Left: copy ──────────────────────────────────────── */}
+            <div className="text-center lg:text-left space-y-7 max-w-xl mx-auto lg:mx-0">
+              {/* Badge */}
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-body font-semibold text-white/90 animate-fade-up"
+                style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(10px)" }}>
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
                 </span>
-              </Link>
-              <a href="#how"
-                className="inline-flex items-center gap-2 font-body font-medium text-white/85 hover:text-white text-sm transition-colors px-4 py-4 rounded-xl hover:bg-white/10">
-                {th ? "ดูวิธีการทำงาน" : "See how it works"}
-                <span className="opacity-70 animate-bounce">↓</span>
-              </a>
+                AI-Powered · Greulich &amp; Pyle Standard
+              </div>
+
+              {/* Heading */}
+              <h1 id="hero-heading"
+                className="font-display font-bold text-white leading-[1.06] animate-fade-up animate-delay-100"
+                style={{ fontSize: "clamp(2.5rem, 5.2vw, 4.5rem)", textWrap: "balance", letterSpacing: "-0.03em" }}>
+                {th ? (
+                  <>ประเมินอายุกระดูก{" "}
+                  <span className="text-gradient" style={{ filter: "brightness(1.25)" }}>ด้วย AI</span>{" "}
+                  สำหรับเด็กไทย</>
+                ) : (
+                  <>Bone Age Assessment{" "}
+                  <span className="text-gradient" style={{ filter: "brightness(1.25)" }}>Powered by AI</span>{" "}
+                  for Thai Children</>
+                )}
+              </h1>
+
+              <p className="font-body text-white/75 mx-auto lg:mx-0 animate-fade-up animate-delay-200"
+                style={{ fontSize: "clamp(1rem, 1.4vw, 1.15rem)", maxWidth: "50ch", lineHeight: 1.7 }}>
+                {th
+                  ? "แพทย์อัปโหลด X-ray มือซ้าย AI วิเคราะห์ตามมาตรฐาน Greulich & Pyle ส่งผลและ recommendation ถึงผู้ปกครองได้ใน 2 นาที"
+                  : "Upload a left-hand X-ray. AI analyzes against the Greulich & Pyle atlas. Send results and a recommendation to parents within 2 minutes."}
+              </p>
+
+              {/* CTA */}
+              <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 animate-fade-up animate-delay-300">
+                <Link href={session ? "/dashboard" : "/login"}
+                  className="group relative inline-flex items-center gap-2.5 font-body font-semibold text-white px-8 py-4 rounded-2xl transition-all hover:-translate-y-0.5 active:scale-[0.97] overflow-hidden"
+                  style={{ background: "linear-gradient(120deg,#EA6C49,#F59E0B)", boxShadow: "0 10px 30px rgba(234,108,73,0.45)", fontSize: "1rem" }}>
+                  <span className="shine relative z-10 flex items-center gap-2.5">
+                    {session ? (th ? "กลับสู่ Dashboard" : "Back to Dashboard") : (th ? "เริ่มใช้งานฟรี" : "Start for Free")}
+                    <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
+                  </span>
+                </Link>
+                <a href="#how"
+                  className="inline-flex items-center gap-2 font-body font-medium text-white/85 hover:text-white text-sm transition-colors px-4 py-4 rounded-xl hover:bg-white/10">
+                  {th ? "ดูวิธีการทำงาน" : "See how it works"}
+                  <span className="opacity-70 animate-bounce">↓</span>
+                </a>
+              </div>
             </div>
 
-            {/* Live X-ray → AI → Result diagram */}
-            <div className="relative mx-auto animate-fade-up animate-delay-500" style={{ maxWidth: 620 }}>
-              <FlowDiagram lang={lang} />
+            {/* ── Right: interactive 3D bone hand ─────────────────── */}
+            <div className="relative animate-fade-in animate-delay-500">
+              <HeroHand lang={lang} />
             </div>
           </div>
 
           {/* Scroll cue */}
-          <div className="absolute bottom-7 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
+          <div className="absolute bottom-7 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10">
             <div className="w-5 h-8 rounded-full border-2 border-white/30 flex justify-center pt-1.5">
               <div className="w-1 h-1.5 rounded-full bg-white/70 animate-bounce" />
             </div>
@@ -269,18 +301,42 @@ export default function Home() {
           </svg>
         </section>
 
-        {/* ── Proof strip (marquee) ───────────────────────────────────────── */}
-        <section aria-label="Key metrics" className="bg-bg border-b border-border overflow-hidden">
-          <div className="max-w-5xl mx-auto px-6 py-9 grid grid-cols-2 md:grid-cols-4 gap-6">
-            <StatBlock value={95} suffix="%+" label={th ? "ความแม่นยำ" : "Accuracy"} />
-            <StatBlock value={30} prefix="<" suffix="s" label={th ? "เวลาวิเคราะห์" : "Analysis time"} />
-            <StaticStat value="G&P" label={th ? "มาตรฐาน Atlas" : "Atlas Standard"} />
-            <StaticStat value="RBAC" label={th ? "แยกสิทธิ์" : "Role-based access"} />
+        {/* ── How the AI analyzes (pipeline) ──────────────────────────────── */}
+        <section id="ai" aria-labelledby="ai-heading" className="relative min-h-[100svh] flex flex-col justify-center py-12 px-6 overflow-hidden"
+          style={{ background: dark
+            ? "linear-gradient(180deg, #060d1a 0%, #081427 60%, #060d1a 100%)"
+            : "linear-gradient(180deg, #eef5fc 0%, #e3eefb 55%, #eef5fc 100%)" }}>
+          <div className="absolute inset-0 pointer-events-none" style={{ opacity: dark ? 0.05 : 0.08,
+            backgroundImage: `radial-gradient(circle, ${dark ? "#38BDF8" : "#0EA5E9"} 1px, transparent 1px)`, backgroundSize: "32px 32px" }} />
+          <div className="absolute top-10 -right-40 w-[520px] h-[520px] rounded-full blur-[150px] pointer-events-none"
+            style={{ background: "#0EA5E9", opacity: dark ? 0.2 : 0.16 }} />
+          <div className="absolute bottom-0 -left-40 w-[480px] h-[480px] rounded-full blur-[150px] pointer-events-none"
+            style={{ background: "#EA6C49", opacity: dark ? 0.15 : 0.12 }} />
+
+          <div className="relative max-w-6xl mx-auto w-full">
+            <div className="reveal mb-5 text-center">
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-display font-bold tracking-[0.16em] uppercase mb-2.5"
+                style={{ background: dark ? "rgba(56,189,248,0.12)" : "rgba(2,132,199,0.10)", color: dark ? "#7dd3fc" : "#0284C7", border: `1px solid ${dark ? "rgba(56,189,248,0.25)" : "rgba(2,132,199,0.22)"}` }}>
+                Explainable · Fair · Deep Learning
+              </span>
+              <h2 id="ai-heading" className="font-display font-bold text-ink"
+                style={{ fontSize: "clamp(1.6rem, 3.4vw, 2.5rem)", letterSpacing: "-0.025em", textWrap: "balance" }}>
+                {th ? "AI คิดอะไรอยู่กันแน่" : "What the AI is really thinking"}
+              </h2>
+            </div>
+
+            {/* dark showcase stage — keeps the holographic pipeline readable on any theme */}
+            <div className="relative rounded-3xl p-4 md:p-7 overflow-hidden"
+              style={{ background: dark ? "transparent" : "linear-gradient(180deg,#081427,#060d1a)",
+                border: dark ? "1px solid rgba(56,189,248,0.10)" : "1px solid rgba(56,189,248,0.18)",
+                boxShadow: dark ? "none" : "0 24px 60px rgba(6,13,26,0.28)" }}>
+              <AiPipeline lang={lang} />
+            </div>
           </div>
         </section>
 
         {/* ── How it works ────────────────────────────────────────────────── */}
-        <section id="how" aria-labelledby="how-heading" className="relative py-28 px-6 bg-bg overflow-hidden">
+        <section id="how" aria-labelledby="how-heading" className="relative min-h-[100svh] flex flex-col justify-center py-12 px-6 bg-bg overflow-hidden">
           {/* soft aurora behind */}
           <div className="absolute top-1/3 -left-40 w-[480px] h-[480px] rounded-full blur-[130px] opacity-20 animate-aurora-slow pointer-events-none"
             style={{ background: "rgb(var(--aurora-1))" }} />
@@ -288,7 +344,7 @@ export default function Home() {
             style={{ background: "rgb(var(--aurora-3))" }} />
 
           <div className="relative max-w-6xl mx-auto">
-            <div className="reveal mb-16">
+            <div className="reveal mb-8 md:mb-12">
               <span className="inline-block text-xs font-display font-bold tracking-[0.2em] uppercase text-primary mb-3">
                 {th ? "ขั้นตอน" : "Process"}
               </span>
@@ -303,118 +359,191 @@ export default function Home() {
               </p>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-5">
+            <div className="relative grid md:grid-cols-3 gap-6 md:gap-7">
+              {/* friendly dotted connectors between steps (desktop) */}
+              {[0, 1].map((c) => (
+                <svg key={c} width="80" height="30" viewBox="0 0 80 30"
+                  className="absolute top-[58px] hidden md:block z-20 pointer-events-none"
+                  style={{ left: c === 0 ? "33.33%" : "66.66%", transform: "translateX(-50%)", color: c === 0 ? "rgb(var(--accent))" : "rgb(var(--success))" }}>
+                  <path d="M3 15 C 26 1, 52 29, 70 15" fill="none" stroke="currentColor" strokeWidth="2.5"
+                    strokeLinecap="round" strokeDasharray="1.5 8" opacity="0.55" className="animate-hf-dash" />
+                  <path d="M62 9 L72 15 L62 21" fill="none" stroke="currentColor" strokeWidth="2.5"
+                    strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+                </svg>
+              ))}
+
               {(th ? [
-                { n: "01", title: "อัปโหลด X-ray มือซ้าย",    body: "รองรับ JPEG, PNG และ DICOM ระบุข้อมูลพื้นฐาน อายุ เพศ และน้ำหนักส่วนสูงของเด็ก",           icon: <XrayIcon /> },
-                { n: "02", title: "AI วิเคราะห์อัตโนมัติ",    body: "Deep learning เปรียบเทียบกับ Greulich & Pyle atlas ให้ bone age, confidence score และ risk flag", icon: <ChipIcon /> },
-                { n: "03", title: "ส่ง recommendation",        body: "แพทย์ตรวจสอบผล เขียนคำแนะนำ ระบบสร้าง PDF และแจ้งเตือนผู้ปกครองอัตโนมัติ",                 icon: <ReportIcon /> },
+                { n: "01", title: "อัปโหลด X-ray มือซ้าย",    body: "รองรับ JPEG, PNG และ DICOM ระบุข้อมูลพื้นฐาน อายุ เพศ และน้ำหนักส่วนสูงของเด็ก",           icon: <XrayIcon className="w-8 h-8" /> },
+                { n: "02", title: "AI วิเคราะห์อัตโนมัติ",    body: "Deep learning เปรียบเทียบกับ Greulich & Pyle atlas ให้ bone age, confidence score และ risk flag", icon: <ChipIcon className="w-8 h-8" /> },
+                { n: "03", title: "ส่ง recommendation",        body: "แพทย์ตรวจสอบผล เขียนคำแนะนำ ระบบสร้าง PDF และแจ้งเตือนผู้ปกครองอัตโนมัติ",                 icon: <ReportIcon className="w-8 h-8" /> },
               ] : [
-                { n: "01", title: "Upload the X-ray",          body: "Supports JPEG, PNG, and DICOM. Add basic patient data: age, sex, height, and weight.",            icon: <XrayIcon /> },
-                { n: "02", title: "AI analyzes automatically", body: "Deep learning compares against the Greulich & Pyle atlas. Returns bone age, confidence, risk flag.", icon: <ChipIcon /> },
-                { n: "03", title: "Send the recommendation",   body: "Doctor reviews the result, writes a note. System generates a PDF and notifies the parent.",        icon: <ReportIcon /> },
-              ]).map((step, i) => (
+                { n: "01", title: "Upload the X-ray",          body: "Supports JPEG, PNG, and DICOM. Add basic patient data: age, sex, height, and weight.",            icon: <XrayIcon className="w-8 h-8" /> },
+                { n: "02", title: "AI analyzes automatically", body: "Deep learning compares against the Greulich & Pyle atlas. Returns bone age, confidence, risk flag.", icon: <ChipIcon className="w-8 h-8" /> },
+                { n: "03", title: "Send the recommendation",   body: "Doctor reviews the result, writes a note. System generates a PDF and notifies the parent.",        icon: <ReportIcon className="w-8 h-8" /> },
+              ]).map((step, i) => {
+                const theme = [
+                  { tint: "14 165 233", grad: "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-2)))", ring: "rgb(var(--primary))" },
+                  { tint: "234 108 73", grad: "linear-gradient(135deg,rgb(var(--accent)),rgb(var(--warning)))",    ring: "rgb(var(--accent))" },
+                  { tint: "16 185 129", grad: "linear-gradient(135deg,rgb(var(--success)),rgb(var(--aurora-2)))",  ring: "rgb(var(--success))" },
+                ][i];
+                return (
                 <div key={step.n}
-                  className="reveal group relative glass rounded-2xl p-8 flex flex-col gap-5 transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-primary/10 overflow-hidden"
-                  style={{ transitionDelay: `${i * 90}ms` }}>
-                  <div className="absolute -top-8 -right-6 font-display font-bold text-7xl text-primary/[0.07] select-none group-hover:text-primary/[0.12] transition-colors">
+                  className="reveal group relative rounded-3xl p-6 md:p-7 flex flex-col gap-4 md:gap-5 transition-all duration-500 hover:-translate-y-1 hover:shadow-xl overflow-hidden"
+                  style={{
+                    background: `linear-gradient(165deg, rgb(${theme.tint} / 0.08) 0%, rgb(var(--surface) / 0.7) 58%)`,
+                    border: `1px solid rgb(${theme.tint} / 0.24)`,
+                    boxShadow: `0 1px 0 rgb(255 255 255 / 0.04) inset`,
+                    transitionTimingFunction: "cubic-bezier(0.22,1,0.36,1)",
+                    transitionDelay: `${i * 90}ms`,
+                  }}>
+                  {/* soft corner glow */}
+                  <div className="absolute -top-12 -right-12 w-44 h-44 rounded-full blur-3xl opacity-30 group-hover:opacity-60 transition-opacity duration-500 pointer-events-none"
+                    style={{ background: `rgb(${theme.tint})` }} />
+
+                  {/* friendly step badge */}
+                  <span className="absolute top-6 right-6 w-9 h-9 rounded-full flex items-center justify-center font-display font-bold text-sm tabular-nums select-none"
+                    style={{ color: theme.ring, background: `rgb(${theme.tint} / 0.14)`, border: `1.5px solid rgb(${theme.tint} / 0.40)` }}>
                     {step.n}
-                  </div>
-                  <div className="relative w-12 h-12 rounded-2xl flex items-center justify-center text-white transition-transform group-hover:scale-110 group-hover:rotate-3"
-                    style={{ background: "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" }}>
-                    {step.icon}
-                  </div>
-                  <div className="relative">
-                    <h3 className="font-display font-semibold text-ink" style={{ fontSize: "1.15rem", letterSpacing: "-0.01em" }}>
+                  </span>
+
+                  {/* animated roadmap scene */}
+                  <StepScene i={i} th={th} tint={theme.tint} />
+
+                  <div className="relative flex items-center gap-4">
+                    {/* step icon disc */}
+                    <div className="relative shrink-0 w-12 h-12 rounded-2xl flex items-center justify-center text-white"
+                      style={{ background: theme.grad, boxShadow: `0 8px 18px rgb(${theme.tint} / 0.32)` }}>
+                      {step.icon}
+                    </div>
+                    <h3 className="font-display font-semibold text-ink" style={{ fontSize: "1.2rem", letterSpacing: "-0.01em" }}>
                       {step.title}
                     </h3>
-                    <p className="font-body text-muted mt-2" style={{ fontSize: "0.9375rem", lineHeight: 1.65 }}>
+                  </div>
+
+                  <div className="relative">
+                    <p className="font-body text-muted" style={{ fontSize: "0.9375rem", lineHeight: 1.7 }}>
                       {step.body}
                     </p>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </section>
 
+        {/* ── Proof strip (marquee) ───────────────────────────────────────── */}
+        <section aria-label="Key metrics" className="bg-bg border-b border-border overflow-hidden">
+          <div className="max-w-5xl mx-auto px-6 py-9 grid grid-cols-2 md:grid-cols-4 gap-6">
+            <StatBlock value={95} suffix="%+" label={th ? "ความแม่นยำ" : "Accuracy"} />
+            <StatBlock value={30} prefix="<" suffix="s" label={th ? "เวลาวิเคราะห์" : "Analysis time"} />
+            <StaticStat value="G&P" label={th ? "มาตรฐาน Atlas" : "Atlas Standard"} />
+            <StaticStat value="RBAC" label={th ? "แยกสิทธิ์" : "Role-based access"} />
+          </div>
+        </section>
+
         {/* ── Who it's for ────────────────────────────────────────────────── */}
-        <section id="who" aria-labelledby="who-heading" className="relative py-28 px-6 overflow-hidden"
-          style={{ background: "#070d1a" }}>
-          <div className="absolute inset-0 opacity-[0.06] pointer-events-none"
-            style={{ backgroundImage: "radial-gradient(circle, #38BDF8 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
-          <div className="absolute top-0 left-1/4 w-[520px] h-[520px] rounded-full blur-[140px] opacity-25 animate-aurora pointer-events-none"
-            style={{ background: "#0EA5E9" }} />
-          <div className="absolute bottom-0 right-1/4 w-[460px] h-[460px] rounded-full blur-[140px] opacity-20 animate-aurora-slow pointer-events-none"
-            style={{ background: "#EA6C49" }} />
+        <section id="who" aria-labelledby="who-heading" className="relative min-h-[100svh] flex flex-col justify-center py-12 px-6 overflow-hidden"
+          style={{ background: dark ? "#070d1a" : "linear-gradient(180deg,#eaf2fb 0%,#f1f6fc 100%)" }}>
+          <div className="absolute inset-0 pointer-events-none" style={{ opacity: dark ? 0.06 : 0.08,
+            backgroundImage: `radial-gradient(circle, ${dark ? "#38BDF8" : "#0EA5E9"} 1px, transparent 1px)`, backgroundSize: "30px 30px" }} />
+          <div className="absolute top-0 left-1/4 w-[520px] h-[520px] rounded-full blur-[140px] animate-aurora pointer-events-none"
+            style={{ background: "#0EA5E9", opacity: dark ? 0.25 : 0.16 }} />
+          <div className="absolute bottom-0 right-1/4 w-[460px] h-[460px] rounded-full blur-[140px] animate-aurora-slow pointer-events-none"
+            style={{ background: "#EA6C49", opacity: dark ? 0.2 : 0.14 }} />
 
           <div className="relative max-w-6xl mx-auto">
-            <h2 id="who-heading" className="reveal font-display font-bold text-white mb-12"
+            <h2 id="who-heading" className="reveal font-display font-bold text-ink mb-3"
               style={{ fontSize: "clamp(1.75rem, 4vw, 3rem)", letterSpacing: "-0.025em", textWrap: "balance" }}>
               {th ? "สองมุมมอง ระบบเดียว" : "Two Perspectives, One System"}
             </h2>
+            <p className="reveal font-body text-muted mb-7 max-w-2xl" style={{ fontSize: "1.0625rem", lineHeight: 1.6 }}>
+              {th
+                ? "แพทย์วิเคราะห์ X-ray ด้วย AI ในไม่กี่วินาที แล้วส่งผลตรงถึงมือถือผู้ปกครอง — เข้าใจง่าย ไร้ศัพท์แพทย์"
+                : "Doctors analyze X-rays with AI in seconds, then send results straight to parents' phones — clear and jargon-free."}
+            </p>
 
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid md:grid-cols-[1fr_auto_1fr] gap-4 md:gap-5 items-stretch">
               {/* Doctor */}
-              <div className="reveal group rounded-2xl p-8 flex flex-col gap-6 transition-all duration-300 hover:-translate-y-1 overflow-hidden relative"
+              <div className="reveal group rounded-2xl p-5 md:p-6 flex flex-col gap-4 transition-all duration-300 hover:-translate-y-1 overflow-hidden relative"
                 style={{ background: "rgba(14,165,233,0.10)", border: "1px solid rgba(56,189,248,0.22)", backdropFilter: "blur(14px)" }}>
                 <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl opacity-30 transition-opacity group-hover:opacity-50"
                   style={{ background: "#38BDF8" }} />
                 <div className="relative flex items-center gap-3">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "rgba(56,189,248,0.22)" }}>
-                    <DoctorIcon className="w-6 h-6 text-[#7dd3fc]" />
+                    <DoctorIcon className="w-6 h-6 text-[#0284C7] dark:text-[#7dd3fc]" />
                   </div>
                   <div>
-                    <p className="font-display font-semibold text-white text-base">{th ? "แพทย์เด็ก" : "Pediatrician"}</p>
-                    <p className="font-body text-xs" style={{ color: "rgba(125,211,252,0.75)" }}>{th ? "บทบาทหลัก" : "Primary user"}</p>
+                    <p className="font-display font-semibold text-ink text-base">{th ? "แพทย์เด็ก" : "Pediatrician"}</p>
+                    <p className="font-body text-xs" style={{ color: dark ? "rgba(125,211,252,0.75)" : "#0369A1" }}>{th ? "บทบาทหลัก · ผู้วิเคราะห์" : "Primary user · Analyst"}</p>
                   </div>
                 </div>
-                <ul className="relative space-y-3">
-                  {(th ? [
-                    "อัปโหลด X-ray และดูผล AI ในหน้าเดียวกัน",
-                    "จัดการรายชื่อผู้ป่วยและประวัติการประเมิน",
-                    "เขียน recommendation ส่งตรงถึงผู้ปกครอง",
-                    "Export PDF รายงานสำหรับแฟ้มผู้ป่วย",
-                  ] : [
-                    "Upload X-ray and view AI result on one screen",
-                    "Manage patient list and assessment history",
-                    "Write recommendations sent directly to parents",
-                    "Export PDF reports for patient records",
-                  ]).map((item, i) => (
-                    <li key={i} className="flex items-start gap-2.5 font-body text-white/80" style={{ fontSize: "0.9375rem" }}>
-                      <CheckIcon className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#7dd3fc]" />{item}
+                {/* live product shot — what the doctor really sees */}
+                <div className="relative transition-transform duration-300 group-hover:-translate-y-0.5">
+                  <DoctorPreview th={th} />
+                </div>
+                <ul className="relative space-y-1.5">
+                  {[
+                    { icon: <UploadIcon className="w-[18px] h-[18px] text-[#0284C7] dark:text-[#7dd3fc]" />, th: "อัปโหลด X-ray และดูผล AI ในหน้าเดียวกัน", en: "Upload X-ray and view AI result on one screen" },
+                    { icon: <UsersIcon className="w-[18px] h-[18px] text-[#0284C7] dark:text-[#7dd3fc]" />, th: "จัดการรายชื่อผู้ป่วยและประวัติการประเมิน", en: "Manage patient list and assessment history" },
+                    { icon: <MessageIcon className="w-[18px] h-[18px] text-[#0284C7] dark:text-[#7dd3fc]" />, th: "เขียน recommendation ส่งตรงถึงผู้ปกครอง", en: "Write recommendations sent directly to parents" },
+                    { icon: <ReportIcon className="w-[18px] h-[18px] text-[#0284C7] dark:text-[#7dd3fc]" />, th: "Export PDF รายงานสำหรับแฟ้มผู้ป่วย", en: "Export PDF reports for patient records" },
+                  ].map((f, i) => (
+                    <li key={i} className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                      style={{ background: "rgba(56,189,248,0.09)", border: "1px solid rgba(56,189,248,0.18)" }}>
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(56,189,248,0.18)" }}>{f.icon}</span>
+                      <span className="font-body text-ink/85 leading-snug" style={{ fontSize: "0.875rem" }}>{th ? f.th : f.en}</span>
                     </li>
                   ))}
                 </ul>
               </div>
 
+              {/* Center: one shared system */}
+              <div className="reveal flex md:flex-col items-center justify-center gap-3 py-1 md:py-0">
+                <div className="hidden md:block w-px flex-1" style={{ background: "linear-gradient(to bottom, transparent, rgba(56,189,248,0.5))" }} />
+                <div className="relative flex flex-col items-center gap-2">
+                  <div className="relative flex items-center justify-center">
+                    <span className="absolute inset-0 rounded-2xl animate-ping opacity-40"
+                      style={{ background: "radial-gradient(circle, rgba(56,189,248,0.5), transparent 70%)" }} />
+                    <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center shadow-lg"
+                      style={{ background: dark ? "linear-gradient(135deg, rgba(56,189,248,0.28), rgba(251,146,60,0.28))" : "linear-gradient(135deg, rgba(2,132,199,0.16), rgba(194,65,12,0.16))", border: `1px solid ${dark ? "rgba(255,255,255,0.22)" : "rgba(2,132,199,0.30)"}`, backdropFilter: "blur(10px)" }}>
+                      <CoreIcon className="w-8 h-8 text-ink" />
+                    </div>
+                  </div>
+                  <p className="font-display text-[0.7rem] font-semibold text-ink/70 whitespace-nowrap tracking-wide">{th ? "ระบบเดียว" : "One System"}</p>
+                </div>
+                <div className="hidden md:block w-px flex-1" style={{ background: "linear-gradient(to top, transparent, rgba(251,146,60,0.5))" }} />
+              </div>
+
               {/* Parent */}
-              <div className="reveal group rounded-2xl p-8 flex flex-col gap-6 transition-all duration-300 hover:-translate-y-1 overflow-hidden relative"
+              <div className="reveal group rounded-2xl p-5 md:p-6 flex flex-col gap-4 transition-all duration-300 hover:-translate-y-1 overflow-hidden relative"
                 style={{ background: "rgba(234,108,73,0.10)", border: "1px solid rgba(251,146,60,0.22)", backdropFilter: "blur(14px)", transitionDelay: "90ms" }}>
                 <div className="absolute -top-16 -right-16 w-48 h-48 rounded-full blur-3xl opacity-30 transition-opacity group-hover:opacity-50"
                   style={{ background: "#FB923C" }} />
                 <div className="relative flex items-center gap-3">
                   <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "rgba(251,146,60,0.22)" }}>
-                    <ParentIcon className="w-6 h-6" style={{ color: "#FDBA74" }} />
+                    <ParentIcon className="w-6 h-6" style={{ color: dark ? "#FDBA74" : "#C2410C" }} />
                   </div>
                   <div>
-                    <p className="font-display font-semibold text-white text-base">{th ? "ผู้ปกครอง" : "Parent"}</p>
-                    <p className="font-body text-xs" style={{ color: "rgba(253,186,116,0.75)" }}>{th ? "ผู้รับผลการประเมิน" : "Result recipient"}</p>
+                    <p className="font-display font-semibold text-ink text-base">{th ? "ผู้ปกครอง" : "Parent"}</p>
+                    <p className="font-body text-xs" style={{ color: dark ? "rgba(253,186,116,0.75)" : "#C2410C" }}>{th ? "ผู้รับผลการประเมิน" : "Result recipient"}</p>
                   </div>
                 </div>
-                <ul className="relative space-y-3">
-                  {(th ? [
-                    "รับแจ้งเตือนทันทีเมื่อมีผลการประเมินใหม่",
-                    "ดูผลการเจริญเติบโตของบุตรหลานในรูปแบบที่เข้าใจง่าย",
-                    "อ่าน recommendation จากแพทย์ได้ทุกที่",
-                    "ไม่ต้องสับสนกับคำศัพท์ทางการแพทย์",
-                  ] : [
-                    "Receive instant notifications when a new result is ready",
-                    "View your child's growth in an easy-to-understand format",
-                    "Read doctor recommendations from anywhere",
-                    "No confusing medical jargon",
-                  ]).map((item, i) => (
-                    <li key={i} className="flex items-start gap-2.5 font-body text-white/80" style={{ fontSize: "0.9375rem" }}>
-                      <CheckIcon className="w-4 h-4 mt-0.5 flex-shrink-0" style={{ color: "#FDBA74" }} />{item}
+                {/* live product shot — what the parent receives on their phone */}
+                <div className="relative flex justify-center transition-transform duration-300 group-hover:-translate-y-0.5">
+                  <div className="animate-float-soft"><ParentPreview th={th} /></div>
+                </div>
+                <ul className="relative space-y-1.5">
+                  {[
+                    { icon: <BellIcon className="w-[18px] h-[18px]" style={{ color: dark ? "#FDBA74" : "#C2410C" }} />, th: "รับแจ้งเตือนทันทีเมื่อมีผลการประเมินใหม่", en: "Receive instant notifications when a new result is ready" },
+                    { icon: <TrendIcon className="w-[18px] h-[18px]" style={{ color: dark ? "#FDBA74" : "#C2410C" }} />, th: "ดูผลการเจริญเติบโตของบุตรหลานในรูปแบบที่เข้าใจง่าย", en: "View your child's growth in an easy-to-understand format" },
+                    { icon: <BookIcon className="w-[18px] h-[18px]" style={{ color: dark ? "#FDBA74" : "#C2410C" }} />, th: "อ่าน recommendation จากแพทย์ได้ทุกที่", en: "Read doctor recommendations from anywhere" },
+                    { icon: <SparkleIcon className="w-[18px] h-[18px]" style={{ color: dark ? "#FDBA74" : "#C2410C" }} />, th: "ไม่ต้องสับสนกับคำศัพท์ทางการแพทย์", en: "No confusing medical jargon" },
+                  ].map((f, i) => (
+                    <li key={i} className="flex items-center gap-2.5 rounded-xl px-2.5 py-2 transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.04]"
+                      style={{ background: "rgba(251,146,60,0.10)", border: "1px solid rgba(251,146,60,0.20)" }}>
+                      <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: "rgba(251,146,60,0.18)" }}>{f.icon}</span>
+                      <span className="font-body text-ink/85 leading-snug" style={{ fontSize: "0.875rem" }}>{th ? f.th : f.en}</span>
                     </li>
                   ))}
                 </ul>
@@ -424,34 +553,77 @@ export default function Home() {
         </section>
 
         {/* ── CTA close ───────────────────────────────────────────────────── */}
-        <section id="about" aria-labelledby="cta-heading" className="relative py-32 px-6 overflow-hidden"
+        <section id="about" aria-labelledby="cta-heading" className="relative min-h-[100svh] flex items-center justify-center py-20 px-6 overflow-hidden"
           style={{ background: "linear-gradient(160deg, #0284C7 0%, #0EA5E9 55%, #38BDF8 100%)" }}>
+          {/* wave transition from the dark section above */}
+          <svg className="absolute top-0 left-0 w-full" viewBox="0 0 1440 120" preserveAspectRatio="none" style={{ height: 70, zIndex: 4 }}>
+            <path d="M0 0 L1440 0 L1440 56 C1080 128, 360 -8, 0 56 Z" fill="#070d1a" />
+          </svg>
+          {/* spotlight + vignette for depth */}
+          <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(120% 75% at 50% 4%, rgba(255,255,255,0.20), transparent 58%)", zIndex: 1 }} />
+          <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(90% 60% at 50% 120%, rgba(3,18,32,0.55), transparent 60%)", zIndex: 1 }} />
+          {/* faint X-ray hand watermark */}
+          <img src="/Hand-nobg.png" alt="" aria-hidden className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none animate-float-soft"
+            style={{ width: "min(56vw, 440px)", opacity: 0.06, filter: "brightness(0) invert(1) blur(1px)", zIndex: 1 }} />
           <AuroraField subtle />
-          <div className="relative z-10 max-w-3xl mx-auto text-center space-y-8">
+          <Particles />
+
+          <div className="relative z-10 max-w-xl mx-auto text-center flex flex-col items-center gap-5">
+            {/* eyebrow */}
+            <div className="reveal inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-body font-semibold text-white/95"
+              style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", backdropFilter: "blur(10px)" }}>
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+              </span>
+              {th ? "เปิดให้ใช้งานแล้ว · ฟรีสำหรับแพทย์" : "Now open · Free for doctors"}
+            </div>
+
             <h2 id="cta-heading" className="reveal font-display font-bold text-white"
-              style={{ fontSize: "clamp(2rem, 5vw, 3.75rem)", letterSpacing: "-0.03em", textWrap: "balance", lineHeight: 1.1 }}>
-              {th ? "พร้อมเริ่มประเมินอายุกระดูก?" : "Ready to start assessing bone age?"}
+              style={{ fontSize: "clamp(2.1rem, 5.4vw, 3.9rem)", letterSpacing: "-0.03em", textWrap: "balance", lineHeight: 1.08, textShadow: "0 2px 30px rgba(2,16,28,0.25)" }}>
+              {th ? (<>พร้อมเริ่ม<span style={{ background: "linear-gradient(110deg,#FFFFFF,#FDE68A 55%,#FDBA74)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>ประเมินอายุกระดูก</span>?</>)
+                  : (<>Ready to start <span style={{ background: "linear-gradient(110deg,#FFFFFF,#FDE68A 55%,#FDBA74)", WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent" }}>assessing bone age</span>?</>)}
             </h2>
-            <p className="reveal font-body text-white/75 mx-auto" style={{ fontSize: "1.0625rem", lineHeight: 1.7, maxWidth: "44ch" }}>
+
+            <p className="reveal font-body text-white/80 mx-auto" style={{ fontSize: "1.0625rem", lineHeight: 1.65, maxWidth: "40ch" }}>
               {th
                 ? "ระบบใช้งานฟรีสำหรับแพทย์ ลงทะเบียนได้ทันทีโดยไม่ต้องรอการอนุมัติ"
                 : "Free for doctors. Sign up immediately with no approval wait."}
             </p>
-            <div className="reveal flex flex-wrap items-center justify-center gap-4">
+
+            <div className="reveal flex flex-col sm:flex-row items-center justify-center gap-3 w-full sm:w-auto">
               <Link href={session ? "/dashboard" : "/login"}
-                className="group relative inline-flex items-center gap-2.5 font-body font-semibold text-primary-dark bg-white px-10 py-5 rounded-2xl transition-all hover:-translate-y-0.5 active:scale-[0.97] text-lg overflow-hidden"
-                style={{ boxShadow: "0 12px 40px rgba(0,0,0,0.22)" }}>
+                className="group relative inline-flex w-full sm:w-auto items-center justify-center gap-2.5 font-body font-bold text-primary-dark bg-white px-9 py-4 sm:py-5 rounded-2xl transition-all hover:-translate-y-0.5 active:scale-[0.97] text-lg overflow-hidden"
+                style={{ boxShadow: "0 14px 44px rgba(0,0,0,0.28), 0 0 0 6px rgba(255,255,255,0.10)" }}>
                 <span className="shine relative z-10 flex items-center gap-2.5">
                   {session ? (th ? "กลับสู่ Dashboard" : "Back to Dashboard") : (th ? "สมัครใช้งานฟรี" : "Sign Up Free")}
                   <ArrowRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
                 </span>
               </Link>
-              {session && (
-                <p className="font-body text-sm text-white/60">
-                  {th ? `เข้าสู่ระบบเป็น ${session.name}` : `Signed in as ${session.name}`}
-                </p>
-              )}
+              <a href="#how"
+                className="inline-flex w-full sm:w-auto items-center justify-center gap-2 font-body font-semibold text-white px-7 py-4 sm:py-5 rounded-2xl text-base transition-all hover:-translate-y-0.5 active:scale-[0.97]"
+                style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.30)", backdropFilter: "blur(8px)" }}>
+                {th ? "ดูวิธีการทำงาน" : "See how it works"}
+              </a>
             </div>
+
+            {/* trust badges */}
+            <div className="reveal flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-1">
+              {(th
+                ? ["ไม่ต้องใช้บัตรเครดิต", "ลงทะเบียนใน 1 นาที", "ข้อมูลเข้ารหัสปลอดภัย"]
+                : ["No credit card", "1-minute signup", "Encrypted & secure"]
+              ).map((t) => (
+                <span key={t} className="inline-flex items-center gap-1.5 font-body text-sm text-white/75">
+                  <CheckIcon className="w-4 h-4 text-emerald-300" />{t}
+                </span>
+              ))}
+            </div>
+
+            {session && (
+              <p className="font-body text-sm text-white/60">
+                {th ? `เข้าสู่ระบบเป็น ${session.name}` : `Signed in as ${session.name}`}
+              </p>
+            )}
           </div>
         </section>
       </main>
@@ -543,67 +715,6 @@ function StaticStat({ value, label }: { value: string; label: string }) {
   );
 }
 
-// ── Flow Diagram (animated) ─────────────────────────────────────────────────────
-function FlowDiagram({ lang }: { lang: string }) {
-  const th = lang === "th";
-  return (
-    <div className="flex items-center justify-center gap-2.5 md:gap-4 py-4" aria-hidden="true">
-      {/* X-ray card with scan line */}
-      <div className="relative flex flex-col items-center gap-2.5 rounded-2xl p-4 md:p-5 w-32 md:w-36 animate-float-soft overflow-hidden"
-        style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", backdropFilter: "blur(8px)" }}>
-        <div className="absolute left-0 right-0 h-6 pointer-events-none"
-          style={{ top: 0, background: "linear-gradient(rgba(56,189,248,0.55), transparent)", animation: "scan-line 3.5s ease-in-out infinite" }} />
-        <div className="relative w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center">
-          <XrayIcon className="w-6 h-6 text-white" />
-        </div>
-        <div className="text-center">
-          <p className="font-display font-semibold text-white text-xs leading-tight">{th ? "X-ray มือ" : "Hand X-ray"}</p>
-          <p className="font-body text-white/55 text-[10px] mt-0.5">{th ? "อัปโหลด" : "Upload"}</p>
-        </div>
-      </div>
-
-      <FlowArrow />
-
-      {/* AI card with pulse ring */}
-      <div className="relative flex flex-col items-center gap-2.5 rounded-2xl p-4 md:p-5 w-32 md:w-36 animate-float overflow-hidden"
-        style={{ background: "rgba(255,255,255,0.20)", border: "1px solid rgba(255,255,255,0.34)", backdropFilter: "blur(8px)", boxShadow: "0 0 40px rgba(56,189,248,0.35)" }}>
-        <div className="relative w-12 h-12 rounded-xl bg-white/22 flex items-center justify-center">
-          <span className="absolute inset-0 rounded-xl border border-white/50 animate-pulse-ring" />
-          <ChipIcon className="w-6 h-6 text-white animate-spin-slow" />
-        </div>
-        <div className="text-center">
-          <p className="font-display font-semibold text-white text-xs leading-tight">{th ? "AI วิเคราะห์" : "AI Analysis"}</p>
-          <p className="font-body text-white/55 text-[10px] mt-0.5">Greulich &amp; Pyle</p>
-        </div>
-      </div>
-
-      <FlowArrow />
-
-      {/* Result card */}
-      <div className="relative flex flex-col items-center gap-2.5 rounded-2xl p-4 md:p-5 w-32 md:w-36 animate-float-soft overflow-hidden"
-        style={{ background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", backdropFilter: "blur(8px)", animationDelay: "-2s" }}>
-        <div className="relative w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center">
-          <ReportIcon className="w-6 h-6 text-white" />
-        </div>
-        <div className="text-center">
-          <p className="font-display font-semibold text-white text-xs leading-tight">{th ? "ผลและรายงาน" : "Result & Report"}</p>
-          <p className="font-body text-white/55 text-[10px] mt-0.5">{th ? "PDF พร้อมส่ง" : "PDF ready"}</p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FlowArrow() {
-  return (
-    <div className="flex items-center gap-0.5 flex-shrink-0">
-      {[0, 1, 2].map(i => (
-        <span key={i} className="w-1 h-1 rounded-full bg-white/70 animate-twinkle" style={{ animationDelay: `${i * 0.25}s` }} />
-      ))}
-    </div>
-  );
-}
-
 // ── Icons ──────────────────────────────────────────────────────────────────────
 function LogoMark({ scrolled = false }: { scrolled?: boolean }) {
   return (
@@ -625,6 +736,276 @@ function ArrowRight({ className = "" }: { className?: string }) {
     </svg>
   );
 }
+/**
+ * A real hand-shaped Grad-CAM heatmap: faint X-ray bones underneath, with the
+ * heat gradient clipped to the hand silhouette (via PNG alpha mask) and hot
+ * spots at the wrist / growth-plate joints — like the actual model output,
+ * not a generic blob.
+ */
+function HandHeatmap({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  const mask: React.CSSProperties = {
+    WebkitMaskImage: "url(/Hand-nobg.png)", maskImage: "url(/Hand-nobg.png)",
+    WebkitMaskRepeat: "no-repeat", maskRepeat: "no-repeat",
+    WebkitMaskSize: "contain", maskSize: "contain",
+    WebkitMaskPosition: "center", maskPosition: "center",
+  };
+  return (
+    <div className={`relative ${className}`} style={style} aria-hidden>
+      {/* faint bones underneath */}
+      <img src="/Hand-nobg.png" alt="" className="absolute inset-0 w-full h-full object-contain"
+        style={{ filter: "grayscale(1) brightness(1.5) contrast(1.1)", opacity: 0.45 }} />
+      {/* Grad-CAM heat, clipped to the hand shape */}
+      <div className="absolute inset-0 animate-glow" style={{
+        ...mask,
+        mixBlendMode: "screen",
+        background: `
+          radial-gradient(circle at 47% 66%, rgba(255,42,28,0.96), rgba(255,42,28,0) 23%),
+          radial-gradient(circle at 56% 45%, rgba(255,156,28,0.9), rgba(255,156,28,0) 19%),
+          radial-gradient(circle at 41% 33%, rgba(255,232,66,0.72), rgba(255,232,66,0) 17%),
+          radial-gradient(circle at 60% 60%, rgba(80,220,255,0.5), rgba(80,220,255,0) 30%),
+          linear-gradient(180deg, rgba(30,90,255,0.42), rgba(20,190,150,0.4))
+        `,
+      }} />
+    </div>
+  );
+}
+
+/**
+ * Animated mini-mockup of the actual app panel for each how-it-works step —
+ * mirrors the real UI (New Assessment slide-over, Assessment Detail, Notify
+ * Parent) so the roadmap shows users the screens they will really see.
+ */
+function StepScene({ i, th, tint }: { i: number; th: boolean; tint: string }) {
+  const win = "relative h-56 rounded-2xl overflow-hidden flex flex-col";
+  const winStyle: React.CSSProperties = {
+    background: "rgb(var(--surface))",
+    border: `1px solid rgb(${tint} / 0.28)`,
+    boxShadow: `0 18px 40px rgb(${tint} / 0.14), 0 1px 0 rgb(255 255 255 / 0.05) inset`,
+  };
+  // Drawer header matching the real slide-over panels: close-X, title, subtitle.
+  const TitleBar = ({ title, sub, right }: { title: string; sub?: string; right?: React.ReactNode }) => (
+    <div className="flex items-center gap-2 px-2.5 py-2 border-b shrink-0" style={{ borderColor: "rgb(var(--border) / 0.6)" }}>
+      <span className="w-5 h-5 rounded-lg grid place-items-center border shrink-0" style={{ borderColor: "rgb(var(--border))", color: "rgb(var(--muted))" }}>
+        <svg viewBox="0 0 24 24" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+      </span>
+      <div className="min-w-0">
+        <p className="font-display font-bold text-ink leading-none truncate" style={{ fontSize: 10.5 }}>{title}</p>
+        {sub && <p className="font-body text-muted leading-none truncate mt-0.5" style={{ fontSize: 7.5 }}>{sub}</p>}
+      </div>
+      {right && <span className="ml-auto shrink-0">{right}</span>}
+    </div>
+  );
+  const Label = ({ children, req }: { children: React.ReactNode; req?: boolean }) => (
+    <p className="font-body font-semibold uppercase text-muted mb-1" style={{ fontSize: 7, letterSpacing: "0.06em" }}>
+      {children}{req && <span style={{ color: "rgb(var(--danger))" }}> *</span>}
+    </p>
+  );
+  const Field = ({ value }: { value: string }) => (
+    <div className="rounded-md border flex items-center px-2" style={{ height: 18, borderColor: "rgb(var(--border))", background: "rgb(var(--bg))" }}>
+      <span className="font-body text-ink/70" style={{ fontSize: 8 }}>{value}</span>
+    </div>
+  );
+
+  // ── 1) New Assessment panel — upload the X-ray ─────────────────────────
+  if (i === 0) {
+    return (
+      <div className={win} style={winStyle} aria-hidden>
+        <TitleBar title={th ? "สร้างการประเมินใหม่" : "New Assessment"} sub={th ? "ด.ช. สมชาย ใจดี" : "Somchai J."} />
+        <div className="flex-1 p-2.5 flex flex-col gap-1.5 min-h-0">
+          <div><Label req>{th ? "ภาพ X-ray มือซ้าย" : "Left Hand X-ray"}</Label>
+            {/* X-ray dropzone (filled preview) */}
+            <div className="rounded-lg border-2 border-dashed grid place-items-center overflow-hidden relative"
+              style={{ borderColor: `rgb(${tint} / 0.45)`, background: "rgb(0 0 0 / 0.8)", height: 78 }}>
+              <img src="/Hand-nobg.png" alt="" className="h-[60px] animate-hf-drop" style={{ filter: "brightness(1.18) contrast(1.05)" }} />
+              <span className="absolute bottom-1 font-body text-white/45" style={{ fontSize: 7.5 }}>JPEG · PNG · DICOM</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label>{th ? "ส่วนสูง (ซม.)" : "Height (cm)"}</Label><Field value="120.0" /></div>
+            <div><Label>{th ? "น้ำหนัก (กก.)" : "Weight (kg)"}</Label><Field value="25.0" /></div>
+          </div>
+          {/* Submit button with light sweep */}
+          <div className="relative mt-auto h-7 rounded-lg grid place-items-center overflow-hidden text-white font-body font-semibold shrink-0"
+            style={{ fontSize: 9.5, background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: `0 5px 14px rgb(${tint} / 0.4)` }}>
+            {th ? "ส่งประเมิน AI →" : "Submit for AI Analysis →"}
+            <span className="absolute top-0 bottom-0 w-8 -skew-x-12"
+              style={{ background: "linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent)", animation: "shine-sweep 3.2s ease-in-out infinite" }} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 2) Assessment Detail panel — AI analysis result ────────────────────
+  if (i === 1) {
+    const metrics = th
+      ? [{ k: "อายุกระดูก", v: "8 ปี 4 ด.", hl: true }, { k: "ความมั่นใจ AI", v: "96%" }, { k: "ส่วนสูงคาด (FAH)", v: "172 cm", hl: true }]
+      : [{ k: "Bone Age", v: "8y 4m", hl: true }, { k: "AI Confidence", v: "96%" }, { k: "Final Adult Ht.", v: "172 cm", hl: true }];
+    return (
+      <div className={win} style={winStyle} aria-hidden>
+        <TitleBar title={th ? "รายละเอียดการประเมิน" : "Assessment Detail"} sub={th ? "16 มิ.ย. 2026" : "Jun 16, 2026"}
+          right={<span className="font-body font-semibold px-1.5 py-0.5 rounded-full" style={{ fontSize: 8, background: "rgb(var(--success)/0.14)", color: "rgb(var(--success))" }}>{th ? "ปกติ" : "Normal"}</span>} />
+        <div className="flex-1 p-2.5 flex flex-col gap-1.5 min-h-0">
+          <div className="grid grid-cols-2 gap-2">
+            <div><Label>{th ? "ภาพ X-ray" : "X-ray Image"}</Label>
+              <div className="rounded-lg overflow-hidden grid place-items-center relative" style={{ background: "rgb(0 0 0 / 0.85)", border: "1px solid rgb(var(--border)/0.4)", height: 58 }}>
+                <img src="/Hand-nobg.png" alt="" className="h-12" style={{ filter: "brightness(1.18)" }} />
+                <span className="absolute left-2 right-2 h-[2px] animate-hf-scan rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgb(${tint}), transparent)`, boxShadow: `0 0 10px rgb(${tint})` }} />
+              </div>
+            </div>
+            <div><Label>Heatmap (Grad-CAM)</Label>
+              <div className="rounded-lg overflow-hidden relative" style={{ background: "rgb(0 0 0 / 0.92)", border: "1px solid rgb(var(--border)/0.4)", height: 58 }}>
+                <HandHeatmap className="w-full h-full" />
+              </div>
+            </div>
+          </div>
+          {/* metrics table with header — matches the real "Detailed Metrics" card */}
+          <div className="rounded-lg overflow-hidden" style={{ border: "1px solid rgb(var(--border)/0.4)" }}>
+            <div className="px-2.5 py-1 border-b" style={{ background: "rgb(var(--bg))", borderColor: "rgb(var(--border)/0.4)" }}>
+              <p className="font-display font-bold text-ink" style={{ fontSize: 8 }}>{th ? "ข้อมูลเชิงลึก" : "Detailed Metrics"}</p>
+            </div>
+            {metrics.map((m, k) => (
+              <div key={m.k} className="flex items-center justify-between px-2.5 py-[4px]"
+                style={{ borderTop: k ? "1px solid rgb(var(--border)/0.3)" : undefined }}>
+                <span className="font-body text-muted" style={{ fontSize: 8.5 }}>{m.k}</span>
+                <span className="font-body font-semibold tabular-nums" style={{ fontSize: 9, color: m.hl ? "rgb(var(--primary))" : "rgb(var(--ink))" }}>{m.v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── 3) Notify Parent — recommendation + PDF report ─────────────────────
+  return (
+    <div className={win} style={winStyle} aria-hidden>
+      <TitleBar title={th ? "ส่งผลให้ผู้ปกครอง" : "Notify Parent"} sub={th ? "อีเมลถึงผู้ปกครอง" : "Email to parent"}
+        right={<span className="font-mono font-bold px-1.5 py-0.5 rounded-md" style={{ fontSize: 8, background: `rgb(${tint})`, color: "#fff" }}>PDF</span>} />
+      <div className="flex-1 p-2.5 flex flex-col gap-1.5 min-h-0 relative">
+        <div className="grid grid-cols-2 gap-2">
+          <div><Label req>{th ? "วันนัดติดตาม" : "Follow-up date"}</Label><Field value={th ? "12 ส.ค. 2026" : "Aug 12, 2026"} /></div>
+          <div><Label>{th ? "เวลา" : "Time"}</Label><Field value="10:30" /></div>
+        </div>
+        <div className="flex flex-col min-h-0">
+          <Label>{th ? "ข้อความถึงผู้ปกครอง" : "Message to parent"}</Label>
+          {/* message textarea with lines drawing in */}
+          <div className="rounded-md border p-2 flex flex-col gap-1.5" style={{ borderColor: "rgb(var(--border))", background: "rgb(var(--bg))", height: 46 }}>
+            {[92, 80, 60].map((w, k) => (
+              <span key={k} className="h-1 rounded-full animate-hf-draw" style={{ width: `${w}%`, background: "rgb(var(--muted)/0.35)", animationDelay: `${k * 0.2}s` }} />
+            ))}
+          </div>
+        </div>
+        {/* "Sent to parent" success state pops over (matches real green confirmation) */}
+        <div className="absolute inset-x-2.5 bottom-2.5 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg animate-hf-pop"
+          style={{ background: "rgb(var(--success)/0.12)", border: "1px solid rgb(var(--success)/0.4)", transformOrigin: "center" }}>
+          <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="rgb(var(--success))" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+          <span className="font-body font-semibold" style={{ fontSize: 9.5, color: "rgb(var(--success))" }}>{th ? "ส่งผลให้ผู้ปกครองแล้ว" : "Sent to parent"}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+/** Mini dashboard preview — what the doctor sees (commercial product shot). */
+function DoctorPreview({ th }: { th: boolean }) {
+  const heat = "radial-gradient(circle at 50% 40%, rgba(255,80,40,0.92), transparent 38%), radial-gradient(circle at 46% 64%, rgba(255,184,60,0.7), transparent 42%)";
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ border: "1px solid rgba(56,189,248,0.25)", background: "rgba(3,12,24,0.78)", boxShadow: "0 16px 40px rgba(0,0,0,0.4)" }}>
+      <div className="flex items-center gap-2 px-3 py-2" style={{ borderBottom: "1px solid rgba(56,189,248,0.16)" }}>
+        <span className="flex gap-1">
+          {["#ff5f57", "#febc2e", "#28c840"].map((c) => <span key={c} style={{ width: 7, height: 7, borderRadius: "50%", background: c, opacity: 0.85 }} />)}
+        </span>
+        <span className="font-display text-[10px] text-white/70 ml-1">Totan · {th ? "การประเมิน" : "Assessment"}</span>
+        <span className="ml-auto text-[8px] font-semibold px-1.5 py-0.5 rounded-full" style={{ background: "rgba(52,211,153,0.16)", color: "#6ee7b7" }}>{th ? "ปกติ" : "Normal"}</span>
+      </div>
+      <div className="p-2.5 flex gap-2">
+        <div className="rounded-lg overflow-hidden relative grid place-items-center shrink-0" style={{ width: 52, height: 52, background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <img src="/Hand-nobg.png" alt="" style={{ height: 44, filter: "brightness(1.2)" }} />
+          {/* AI scan sweep */}
+          <span className="absolute left-1.5 right-1.5 h-[2px] rounded-full animate-hf-scan" style={{ background: "linear-gradient(90deg, transparent, #38BDF8, transparent)", boxShadow: "0 0 8px #38BDF8" }} />
+        </div>
+        <div className="rounded-lg overflow-hidden relative grid place-items-center shrink-0" style={{ width: 52, height: 52, background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <img src="/Hand-nobg.png" alt="" style={{ height: 44, filter: "brightness(1.2)" }} />
+          <div className="absolute inset-0 animate-glow" style={{ mixBlendMode: "screen", opacity: 0.82, background: heat }} />
+        </div>
+        <div className="flex-1 flex flex-col justify-center gap-1">
+          {[{ k: th ? "อายุกระดูก" : "Bone age", v: "8y4m", c: "#7dd3fc" }, { k: "FAH", v: "172cm", c: "#7dd3fc" }, { k: th ? "มั่นใจ" : "Conf", v: "96%", c: "#fff" }].map((m) => (
+            <div key={m.k} className="flex items-center justify-between">
+              <span className="font-body text-[9px] text-white/50">{m.k}</span>
+              <span className="font-display font-bold text-[10px] tabular-nums" style={{ color: m.c }}>{m.v}</span>
+            </div>
+          ))}
+          {/* confidence bar fills in */}
+          <div className="h-1 rounded-full overflow-hidden mt-0.5" style={{ background: "rgba(255,255,255,0.1)" }}>
+            <span className="block h-full rounded-full animate-hf-draw" style={{ width: "96%", background: "linear-gradient(90deg,#34D399,#7dd3fc)", transformOrigin: "left" }} />
+          </div>
+        </div>
+      </div>
+      <div className="px-2.5 pb-2.5">
+        <div className="relative h-6 rounded-lg grid place-items-center text-white font-body font-semibold text-[9px] overflow-hidden" style={{ background: "linear-gradient(120deg,#0EA5E9,#38BDF8)" }}>
+          {th ? "ส่งผลให้ผู้ปกครอง →" : "Send to parent →"}
+          <span className="absolute top-0 bottom-0 w-8 -skew-x-12" style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent)", animation: "shine-sweep 3.2s ease-in-out infinite" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Mini phone preview — what the parent receives (commercial product shot). */
+function ParentPreview({ th }: { th: boolean }) {
+  // FAH (predicted adult height) rising vs TH (target height) flat — mirrors the real chart
+  const fah: [number, number][] = [[6, 25], [29, 20.5], [52, 16], [75, 11], [94, 7.5]];
+  const thY = 13; // target-height dashed line
+  const fahLine = fah.map((p) => p.join(",")).join(" ");
+  return (
+    <div className="mx-auto rounded-[1.5rem] p-2" style={{ width: 158, background: "rgba(3,12,24,0.85)", border: "1px solid rgba(251,146,60,0.3)", boxShadow: "0 16px 40px rgba(0,0,0,0.45)" }}>
+      <div className="mx-auto mb-2 rounded-full" style={{ width: 38, height: 4, background: "rgba(255,255,255,0.18)" }} />
+      <div className="rounded-2xl p-2.5 space-y-2" style={{ background: "rgba(255,255,255,0.04)" }}>
+        <div className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 animate-hf-drop" style={{ background: "rgba(251,146,60,0.12)", border: "1px solid rgba(251,146,60,0.3)" }}>
+          <svg viewBox="0 0 24 24" className="w-3 h-3 shrink-0 animate-bob" fill="#FDBA74"><path d="M12 22a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22zm6-6V11a6 6 0 10-12 0v5l-1.5 1.5V18h15v-.5L18 16z" /></svg>
+          <span className="font-body text-[9px] text-white/85 leading-tight">{th ? "ผลการประเมินพร้อมแล้ว" : "Your result is ready"}</span>
+          <span className="ml-auto w-1.5 h-1.5 rounded-full shrink-0" style={{ background: "#FB923C", boxShadow: "0 0 0 0 rgba(251,146,60,0.6)", animation: "pulse-ring 1.8s ease-out infinite" }} />
+        </div>
+        <div className="rounded-xl p-2.5 text-center" style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.28)" }}>
+          <div className="text-xl leading-none animate-float-soft">😊</div>
+          <p className="font-display font-bold text-white text-[12px] mt-1">{th ? "การเติบโตปกติ" : "Growth on track"}</p>
+          <p className="font-body text-[9px] text-white/60 mt-0.5">{th ? "ส่วนสูงคาดการณ์ 172 ซม." : "Predicted height 172 cm"}</p>
+        </div>
+        <div className="rounded-lg p-2 overflow-hidden" style={{ background: "rgba(56,189,248,0.08)" }}>
+          {/* legend */}
+          <div className="flex items-center justify-center gap-2.5 mb-1">
+            <span className="flex items-center gap-1"><span className="w-3 h-[2px] rounded-full" style={{ background: "#7dd3fc" }} /><span className="font-body font-semibold text-[7px]" style={{ color: "#7dd3fc" }}>FAH</span></span>
+            <span className="flex items-center gap-1"><svg width="12" height="3"><line x1="0" y1="1.5" x2="12" y2="1.5" stroke="#FB923C" strokeWidth="2" strokeDasharray="3 2" /></svg><span className="font-body font-semibold text-[7px]" style={{ color: "#FB923C" }}>TH</span></span>
+          </div>
+          <svg viewBox="0 0 100 32" className="w-full" style={{ height: 30 }}>
+            <defs>
+              <linearGradient id="fahMini" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#7dd3fc" stopOpacity="0.28" />
+                <stop offset="100%" stopColor="#7dd3fc" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            {/* grid */}
+            {[4, 12, 20, 28].map((y) => <line key={y} x1="3" y1={y} x2="97" y2={y} stroke="rgba(255,255,255,0.07)" strokeWidth="0.5" />)}
+            {/* FAH area fill */}
+            <path d={`M ${fahLine.split(" ").join(" L ").replace(/,/g, " ")} L 94 31 L 6 31 Z`} fill="url(#fahMini)" />
+            {/* TH target — dashed horizontal */}
+            <line x1="6" y1={thY} x2="94" y2={thY} stroke="#FB923C" strokeWidth="1.6" strokeDasharray="4 2.5" strokeLinecap="round" />
+            <text x="90" y={thY - 2} textAnchor="end" fontSize="6" fontWeight="700" fill="#FB923C">172</text>
+            {/* FAH solid line — draws in */}
+            <polyline points={fahLine} fill="none" stroke="#7dd3fc" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"
+              strokeDasharray="120" strokeDashoffset="120" style={{ animation: "draw-line 2.4s ease-out 0.3s forwards" }} />
+            {fah.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="1.7" fill="#7dd3fc" stroke="#0a1626" strokeWidth="0.6" style={{ opacity: 0, animation: `fade-in 0.4s ease-out ${0.5 + i * 0.4}s forwards` }} />)}
+            {/* live pulse on latest FAH point */}
+            <circle cx={fah[fah.length - 1][0]} cy={fah[fah.length - 1][1]} r="2.6" fill="none" stroke="#7dd3fc" strokeWidth="1.1"
+              style={{ transformOrigin: `${fah[fah.length - 1][0]}px ${fah[fah.length - 1][1]}px`, animation: "pulse-ring 1.8s ease-out 2.6s infinite" }} />
+          </svg>
+          <p className="font-body text-[8px] text-white/45 text-center mt-0.5">{th ? "FAH เทียบส่วนสูงเป้าหมาย" : "FAH vs Target Height"}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function XrayIcon({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
@@ -670,6 +1051,65 @@ function CheckIcon({ className = "", style }: { className?: string; style?: Reac
   return (
     <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  );
+}
+function UploadIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M4 17v2a1 1 0 001 1h14a1 1 0 001-1v-2" />
+    </svg>
+  );
+}
+function UsersIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16 19v-1.5a3.5 3.5 0 00-3.5-3.5h-5A3.5 3.5 0 004 17.5V19M9.5 11a3 3 0 100-6 3 3 0 000 6zM18 19v-1.5a3.5 3.5 0 00-2.5-3.35M15 5.2a3 3 0 010 5.6" />
+    </svg>
+  );
+}
+function MessageIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" />
+    </svg>
+  );
+}
+function BellIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0" />
+    </svg>
+  );
+}
+function TrendIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 7-7m0 0h-5m5 0v5" />
+    </svg>
+  );
+}
+function BookIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 006.5 22H20V2H6.5A2.5 2.5 0 004 4.5v15zM9 7h7M9 11h5" />
+    </svg>
+  );
+}
+function SparkleIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3zM18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8.8-2z" />
+    </svg>
+  );
+}
+function CoreIcon({ className = "", style }: { className?: string; style?: React.CSSProperties }) {
+  return (
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
+      <circle cx="12" cy="12" r="2.4" />
+      <circle cx="5" cy="6" r="1.6" /><circle cx="19" cy="6" r="1.6" />
+      <circle cx="5" cy="18" r="1.6" /><circle cx="19" cy="18" r="1.6" />
+      <path strokeLinecap="round" d="M6.3 7L10 10.4M17.7 7L14 10.4M6.3 17L10 13.6M17.7 17L14 13.6" />
     </svg>
   );
 }
