@@ -7,6 +7,7 @@ import { AiResultDto } from './dto/ai-result.dto';
 import { NotifyParentDto } from './dto/notify-parent.dto';
 import { RedisService } from '../redis/redis.service';
 import { Child } from '../children/child.entity';
+import { Recommendation } from '../recommendations/recommendation.entity';
 import { RequestUser } from '../common/request-user';
 
 // ป้ายแปลผล (ภาษาไทย) สำหรับใส่ในเมลถึงผู้ปกครอง
@@ -27,6 +28,8 @@ export class AssessmentsService {
     private assessmentRepo: Repository<Assessment>,
     @InjectRepository(Child)
     private childRepo: Repository<Child>,
+    @InjectRepository(Recommendation)
+    private recRepo: Repository<Recommendation>,
     private redisService: RedisService,
   ) {}
 
@@ -189,6 +192,31 @@ export class AssessmentsService {
       followupNotes: composedNotes,
       parentNotifiedAt: new Date(), // บันทึกว่าส่งให้ผู้ปกครองแล้ว (ไว้โชว์สถานะ + ปุ่มส่งใหม่)
     });
+
+    // ── บันทึก "คำแนะนำ" ให้ผู้ปกครองดูในแอป (โมดูล Recommendations) ──
+    // upsert ต่อ assessment+parent กันคำแนะนำซ้ำเวลาแพทย์กดส่งใหม่ — ส่งใหม่ = อัปเดตเนื้อหา + เด้งเป็นยังไม่อ่าน
+    const recContent = dto.note?.trim() || '';
+    const existingRec = await this.recRepo.findOne({
+      where: { assessmentId: id, parentId: child.parentId },
+    });
+    if (existingRec) {
+      await this.recRepo.update(existingRec.id, {
+        content: recContent,
+        followUpDate: dto.followUpDate,
+        followUpTime: dto.followUpTime ?? null,
+        isRead: false,
+      });
+    } else {
+      const rec = this.recRepo.create({
+        assessmentId: id,
+        doctorId,
+        parentId: child.parentId,
+        content: recContent,
+        followUpDate: dto.followUpDate,
+        followUpTime: dto.followUpTime ?? null,
+      });
+      await this.recRepo.save(rec);
+    }
 
     // ── รวบรวมผลประเมินเป็นข้อความสรุป (ส่งให้ notify-service จัดเป็นเมล) ──
     const boneAge = Number(assessment.boneAgeMonths ?? 0);

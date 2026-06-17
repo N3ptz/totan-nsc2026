@@ -157,6 +157,8 @@ export interface Recommendation {
   doctorId: string;
   parentId: string;
   content: string;
+  followUpDate?: string | null;
+  followUpTime?: string | null;
   isRead: boolean;
   createdAt: string;
 }

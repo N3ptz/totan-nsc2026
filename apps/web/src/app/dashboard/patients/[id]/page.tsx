@@ -851,11 +851,14 @@ function AssessmentDetailPanel({
                       <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
                     </svg>
                     <p className="font-body text-xs font-semibold text-success">
-                      {th ? "ส่งผลให้ผู้ปกครองแล้ว" : "Sent to parent"}
+                      {th ? "ส่งผล + คำแนะนำให้ผู้ปกครองแล้ว" : "Result + recommendation sent"}
                     </p>
                   </div>
                   <p className="font-body text-[11px] text-muted">
                     {th ? "ส่งล่าสุดเมื่อ " : "Last sent "}{fmtSentAt(notifiedAt)}
+                  </p>
+                  <p className="font-body text-[11px] text-muted">
+                    {th ? "ผู้ปกครองได้รับอีเมล และอ่านคำแนะนำได้ในแอป (เมนูคำแนะนำจากแพทย์)" : "Parent was emailed and can read it in their app (Recommendations)."}
                   </p>
                   <button
                     onClick={() => { setEditing(true); setSendStatus("idle"); }}
@@ -875,8 +878,8 @@ function AssessmentDetailPanel({
                   )}
                   <p className="font-body text-xs text-muted leading-relaxed">
                     {th
-                      ? "ระบบจะรวบรวมผลการประเมิน (อายุกระดูก ส่วนสูง การแปลผล) พร้อมวันนัดติดตาม ส่งเป็นอีเมลถึงผู้ปกครอง"
-                      : "The assessment summary (bone age, height, interpretation) and the follow-up date will be emailed to the parent."}
+                      ? "ระบบจะรวบรวมผลการประเมิน (อายุกระดูก ส่วนสูง การแปลผล) พร้อมวันนัดติดตาม ส่งเป็นอีเมล และบันทึกคำแนะนำให้ผู้ปกครองอ่านในแอป (เมนูคำแนะนำจากแพทย์)"
+                      : "The assessment summary and follow-up date are emailed to the parent, and your recommendation is saved to their app (Recommendations menu)."}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
@@ -902,13 +905,18 @@ function AssessmentDetailPanel({
                       />
                     </div>
                   </div>
-                  <textarea
-                    value={note}
-                    onChange={(e) => { setNote(e.target.value); setSendStatus("idle"); }}
-                    rows={3}
-                    placeholder={th ? "ข้อความ/คำแนะนำถึงผู้ปกครอง (ไม่บังคับ) — โภชนาการ การออกกำลังกาย การนอน..." : "Message to parent (optional)..."}
-                    className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none font-body"
-                  />
+                  <div className="space-y-1">
+                    <label className="font-body text-[11px] font-semibold text-ink">
+                      {th ? "คำแนะนำถึงผู้ปกครอง (ไม่บังคับ)" : "Recommendation to parent (optional)"}
+                    </label>
+                    <textarea
+                      value={note}
+                      onChange={(e) => { setNote(e.target.value); setSendStatus("idle"); }}
+                      rows={3}
+                      placeholder={th ? "เช่น โภชนาการ การออกกำลังกาย การนอน หรือสิ่งที่ควรสังเกต..." : "e.g. nutrition, exercise, sleep, things to watch for..."}
+                      className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none font-body"
+                    />
+                  </div>
                   <div className="flex items-center justify-between">
                     <div>
                       {sendStatus === "sent" && (

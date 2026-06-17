@@ -89,7 +89,28 @@ export default function RecommendationsPage() {
                   </span>
                 )}
               </div>
-              <p className="font-body text-sm text-ink leading-relaxed whitespace-pre-wrap">{rec.content}</p>
+              {rec.content ? (
+                <p className="font-body text-sm text-ink leading-relaxed whitespace-pre-wrap">{rec.content}</p>
+              ) : (
+                <p className="font-body text-sm text-muted leading-relaxed italic">
+                  {th ? "แพทย์ส่งผลการประเมินและนัดติดตามให้ท่านแล้ว" : "Your doctor sent the assessment result and a follow-up appointment."}
+                </p>
+              )}
+              {rec.followUpDate && (
+                <div className="mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2"
+                  style={{ background: "rgb(var(--warning)/0.08)", border: "1px solid rgb(var(--warning)/0.25)" }}>
+                  <span className="text-base leading-none">📅</span>
+                  <div className="text-left">
+                    <p className="font-body text-[11px] font-semibold text-warning leading-none">
+                      {th ? "นัดติดตามครั้งถัดไป" : "Next follow-up"}
+                    </p>
+                    <p className="font-body text-xs font-semibold text-ink mt-0.5">
+                      {new Date(rec.followUpDate).toLocaleDateString(th ? "th-TH" : "en-US", { year: "numeric", month: "long", day: "numeric" })}
+                      {rec.followUpTime && <span className="text-muted font-normal"> · {rec.followUpTime} {th ? "น." : ""}</span>}
+                    </p>
+                  </div>
+                </div>
+              )}
             </button>
           ))
         )}

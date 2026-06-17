@@ -16,11 +16,19 @@ export class Recommendation {
   @Column()
   parentId: string; // ส่งถึงผู้ปกครองคนนี้
 
-  @Column({ type: 'text' })
-  content: string; // ข้อความคำแนะนำ
+  @Column({ type: 'text', default: '' })
+  content: string; // ข้อความคำแนะนำจากแพทย์
 
   @Column({ nullable: true })
   mediaUrl: string; // URL วิดีโอหรือเอกสารแนบ
+
+  // วันนัดติดตามครั้งถัดไป (แนบมากับคำแนะนำเมื่อแพทย์กด "ส่งผลให้ผู้ปกครอง")
+  @Column({ type: 'date', nullable: true })
+  followUpDate: string | null;
+
+  // เวลานัด (HH:MM) — ไม่บังคับ
+  @Column({ nullable: true })
+  followUpTime: string | null;
 
   @Column({ default: false })
   isRead: boolean; // ผู้ปกครองอ่านแล้วหรือยัง
