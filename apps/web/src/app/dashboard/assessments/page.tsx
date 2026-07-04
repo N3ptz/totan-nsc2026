@@ -53,7 +53,7 @@ export default function AssessmentsPage() {
         style={{ background: "rgb(var(--aurora-1))" }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 px-8 py-5 glass border-b border-border/50">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-5 glass border-b border-border/50">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-xl font-bold text-ink">{th ? "ผลการประเมิน" : "Assessments"}</h1>
@@ -95,7 +95,7 @@ export default function AssessmentsPage() {
             </p>
             <Link href="/dashboard/patients"
               className="group relative inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-white text-sm font-semibold transition-all hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden"
-              style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.35)" }}>
+              style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.35)" }}>
               <span className="shine relative z-10">
                 {th
                   ? (isDoctor ? "ไปที่รายชื่อผู้ป่วย →" : "ไปที่บุตรหลาน →")

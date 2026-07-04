@@ -480,7 +480,7 @@ export default function PrintReportPage() {
             </div>
             {/* Row 3 */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 7 }}>
-              <Metric label="ส่วนสูงที่คาดการณ์ (FAH)" value={assessment.finalAdultHeightCm ? `${assessment.finalAdultHeightCm} cm` : "—"} sub="Final Adult Height" hi />
+              <Metric label="ส่วนสูงที่AIพยากรณ์ (FAH)" value={assessment.finalAdultHeightCm ? `${assessment.finalAdultHeightCm} cm` : "—"} sub="Final Adult Height" hi />
               <Metric label="ส่วนสูงเป้าหมาย (TH)" value={assessment.targetHeightCm ? `${assessment.targetHeightCm} cm` : (targetHeight ? `${targetHeight} cm` : "—")} sub="Target Height" />
               <div />
               <div />

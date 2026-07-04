@@ -119,7 +119,7 @@ export default function SettingsPage() {
         style={{ background: "rgb(var(--aurora-3))" }} />
 
       <main className="min-h-screen relative z-10">
-        <header className="sticky top-0 z-30 flex items-center px-8 py-4 glass border-b border-border/50">
+        <header className="sticky top-0 z-30 flex items-center pl-16 lg:pl-8 pr-8 py-4 glass border-b border-border/50">
           <div>
             <h1 className="font-display text-xl font-bold text-ink">{ts.title}</h1>
             <p className="font-body text-xs text-muted mt-0.5">
@@ -150,7 +150,7 @@ export default function SettingsPage() {
                 <AvatarPicker
                   initial={initial}
                   gradient={isDoctor
-                    ? "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))"
+                    ? "linear-gradient(135deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))"
                     : "linear-gradient(135deg,rgb(var(--accent)),rgb(var(--warning)))"
                   }
                   preview={avatarPreview}
@@ -223,7 +223,7 @@ export default function SettingsPage() {
                   onClick={saveProfile}
                   disabled={profileSaving}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-                  style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 4px 14px rgb(var(--primary)/0.3)" }}>
+                  style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 4px 14px rgb(var(--primary)/0.3)" }}>
                   {profileSaving ? ts.saving : ts.save}
                 </button>
               </div>

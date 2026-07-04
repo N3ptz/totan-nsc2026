@@ -7,6 +7,8 @@ import { childrenApi, authApi, type Child } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { PatientsSkeleton } from "@/components/Skeleton";
 import { ScrollFade } from "@/components/ScrollFade";
+import { TransitionLink } from "@/components/TransitionLink";
+import { MascotBot } from "@/components/MascotBot";
 
 function calcAge(dob: string) {
   const birth = new Date(dob);
@@ -70,7 +72,7 @@ export default function PatientsPage() {
         style={{ background: "rgb(var(--aurora-4))" }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 px-8 py-5 glass border-b border-border/50">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-5 glass border-b border-border/50">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-xl font-bold text-ink">
@@ -85,7 +87,7 @@ export default function PatientsPage() {
           {isDoctor && (
             <Link href="/dashboard/patients/new"
               className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden"
-              style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.35)" }}>
+              style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.35)" }}>
               <span className="shine relative z-10 flex items-center gap-2">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
@@ -112,8 +114,16 @@ export default function PatientsPage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full rounded-xl border border-border bg-bg2/60 text-ink text-sm outline-none transition-all placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/15 focus:bg-surface"
-              style={{ paddingTop: "0.5rem", paddingBottom: "0.5rem", paddingLeft: "2.25rem", paddingRight: "1rem" }}
+              style={{ paddingTop: "0.5rem", paddingBottom: "0.5rem", paddingLeft: "2.25rem", paddingRight: search ? "2.25rem" : "1rem" }}
             />
+            <button
+              onClick={() => setSearch("")}
+              aria-label={th ? "ล้างการค้นหา" : "Clear search"}
+              className={`absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full text-muted hover:text-ink hover:bg-border/60 transition-all duration-200 ${search ? "opacity-100 scale-100" : "opacity-0 scale-75 pointer-events-none"}`}>
+              <svg className="w-3 h-3" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           <div className="w-px h-6 bg-border/60 hidden sm:block" />
@@ -125,7 +135,7 @@ export default function PatientsPage() {
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold font-body transition-all ${
                   filter === v ? "text-white shadow-sm" : "text-muted hover:text-ink"
                 }`}
-                style={filter === v ? { background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" } : undefined}>
+                style={filter === v ? { background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))" } : undefined}>
                 {label}
               </button>
             ))}
@@ -140,71 +150,142 @@ export default function PatientsPage() {
         {loading ? (
           <div className="glass rounded-2xl p-16 text-center">
             <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin mx-auto mb-3" />
-            <p className="text-sm text-muted">{th ? "กำลังโหลด..." : "Loading..."}</p>
+            <p className="text-sm text-muted">{th ? "กำลังโหลดรายชื่อผู้ป่วย…" : "Loading patient list…"}</p>
+          </div>
+        ) : children.length === 0 ? (
+          /* ── Zero patients: mascot onboarding state ── */
+          <div className="glass rounded-2xl py-20 px-8 text-center flex flex-col items-center gap-6">
+            <MascotBot
+              variant="idle"
+              size="lg"
+              message={th ? "ยังไม่มีผู้ป่วยนะคะ" : "No patients yet!"}
+            />
+            <div>
+              <p className="font-display font-bold text-ink text-xl mb-2">
+                {th
+                  ? (isDoctor ? "ยังไม่มีผู้ป่วยในระบบ" : "ยังไม่มีบุตรหลาน")
+                  : (isDoctor ? "No patients yet" : "No children yet")}
+              </p>
+              <p className="text-sm text-muted max-w-xs mx-auto leading-relaxed">
+                {th
+                  ? "เริ่มต้นด้วยการเพิ่มผู้ป่วยเพื่อติดตามพัฒนาการและประเมินอายุกระดูก"
+                  : "Start by adding a patient to track their growth and assess bone age"}
+              </p>
+            </div>
+            {isDoctor && (
+              <Link href="/dashboard/patients/new"
+                className="group relative flex items-center gap-2 px-7 py-3 rounded-xl text-sm font-semibold text-white transition-all hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden"
+                style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 8px 28px rgb(var(--primary)/0.40)" }}>
+                <span className="shine relative z-10 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  {th ? "เพิ่มผู้ป่วยรายแรก" : "Add first patient"}
+                </span>
+              </Link>
+            )}
           </div>
         ) : filtered.length === 0 ? (
+          /* ── Search / filter returned nothing ── */
           <div className="glass rounded-2xl p-16 text-center">
-            <div className="text-5xl mb-3 animate-float-soft inline-block">🔍</div>
-            <p className="font-semibold text-ink text-sm">
+            <div className="relative w-16 h-16 mx-auto mb-5">
+              <span className="absolute inset-0 rounded-2xl" style={{ background: "rgb(var(--primary)/0.2)", animation: "pulse-ring 2s ease-out infinite" }} />
+              <div className="relative w-16 h-16 rounded-2xl flex items-center justify-center text-white"
+                style={{ background: "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 8px 24px rgb(var(--primary)/0.3)" }}>
+                <svg className="w-7 h-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+              </div>
+            </div>
+            <p className="font-display font-bold text-ink text-base">
               {th ? (isDoctor ? "ไม่พบผู้ป่วย" : "ไม่พบบุตรหลาน") : (isDoctor ? "No patients found" : "No children found")}
             </p>
-            <p className="text-xs text-muted mt-1">{th ? "ลองเปลี่ยนคำค้นหา" : "Try a different search"}</p>
+            <p className="text-sm text-muted mt-1">{th ? "ลองเปลี่ยนคำค้นหาหรือตัวกรอง" : "Try a different search or filter"}</p>
+            <button
+              onClick={() => { setSearch(""); setFilter("all"); }}
+              className="mt-3 text-xs font-body font-semibold text-primary underline underline-offset-2 hover:text-primary/70 transition-colors">
+              {th ? "ล้างตัวกรองทั้งหมด" : "Clear all filters"}
+            </button>
           </div>
         ) : (
           <div className="glass rounded-2xl overflow-hidden">
-            {/* Table header */}
-            <div className="grid grid-cols-[auto_1fr_120px_100px_100px_80px] gap-4 px-6 py-3 bg-bg2/40 border-b border-border/50 text-[11px] font-semibold text-muted uppercase tracking-wide">
-              <span>#</span>
-              <span>{th ? "ชื่อ" : "Name"}</span>
-              <span>{th ? "วันเกิด" : "DOB"}</span>
-              <span>{th ? "อายุ" : "Age"}</span>
-              <span>{th ? "เพศ" : "Sex"}</span>
-              <span></span>
-            </div>
+            <div className="overflow-x-auto">
+              {/* Table header — desktop only */}
+              <div className="hidden lg:grid grid-cols-[auto_1fr_120px_100px_100px_80px] gap-4 px-6 py-3 bg-bg2/40 border-b border-border/50 text-[11px] font-semibold text-muted uppercase tracking-wide">
+                <span>#</span>
+                <span>{th ? "ชื่อ" : "Name"}</span>
+                <span>{th ? "วันเกิด" : "DOB"}</span>
+                <span>{th ? "อายุ" : "Age"}</span>
+                <span>{th ? "เพศ" : "Sex"}</span>
+                <span></span>
+              </div>
 
-            <ScrollFade enabled={filtered.length > 5} maxHeight={336}>
-            <div className="divide-y divide-border/40">
-              {filtered.map((child, i) => {
-                const age = calcAge(child.dateOfBirth);
-                const isM = child.sex === "M";
-                return (
-                  <Link key={child.id} href={`/dashboard/patients/${child.id}`}
-                    className="grid grid-cols-[auto_1fr_120px_100px_100px_80px] gap-4 items-center px-6 py-3.5 hover:bg-primary/[0.04] transition-colors group">
-                    <span className="text-xs text-muted/60 w-5">{i + 1}</span>
-
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 text-white transition-transform group-hover:scale-105"
-                        style={{ background: isM ? "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" : "linear-gradient(135deg,rgb(var(--accent)),rgb(var(--warning)))" }}>
-                        {getInitials(child.name)}
+              <ScrollFade enabled={filtered.length > 5} maxHeight={336}>
+              <div className="divide-y divide-border/40">
+                {filtered.map((child, i) => {
+                  const age = calcAge(child.dateOfBirth);
+                  const isM = child.sex === "M";
+                  const avatarBg = isM
+                    ? "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))"
+                    : "linear-gradient(135deg,rgb(var(--accent)),rgb(var(--warning)))";
+                  return (
+                    <TransitionLink key={child.id} href={`/dashboard/patients/${child.id}`} className="block group">
+                      {/* Desktop row */}
+                      <div className="hidden lg:grid grid-cols-[auto_1fr_120px_100px_100px_80px] gap-4 items-center px-6 py-3.5 hover:bg-primary/[0.04] transition-colors duration-150">
+                        <span className="text-xs text-muted/60 w-5">{i + 1}</span>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 text-white transition-transform group-hover:scale-105"
+                            style={{ background: avatarBg }}>
+                            {getInitials(child.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-ink text-sm truncate"
+                              style={{ viewTransitionName: `pt-${child.id}` }}>{child.name}</p>
+                            <p className="text-[11px] text-muted">{child.ethnicity ?? ""}</p>
+                          </div>
+                        </div>
+                        <span className="text-sm text-muted">
+                          {new Date(child.dateOfBirth).toLocaleDateString(th ? "th-TH" : "en-US")}
+                        </span>
+                        <span className="text-sm font-medium text-ink">{age} {th ? "ปี" : "yrs"}</span>
+                        <span className={`inline-flex w-fit items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
+                          isM ? "bg-primary/10 text-primary" : "bg-accent/10 text-accent"
+                        }`}>
+                          {isM ? (th ? "♂ ชาย" : "♂ M") : (th ? "♀ หญิง" : "♀ F")}
+                        </span>
+                        <div className="flex justify-end">
+                          <svg className="w-4 h-4 text-muted/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="font-semibold text-ink text-sm truncate">{child.name}</p>
-                        <p className="text-[11px] text-muted">{child.ethnicity ?? ""}</p>
+
+                      {/* Mobile card */}
+                      <div className="flex lg:hidden items-center gap-3 px-4 py-3.5 hover:bg-primary/[0.04] transition-colors duration-150">
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 text-white transition-transform group-hover:scale-105"
+                          style={{ background: avatarBg }}>
+                          {getInitials(child.name)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-ink text-sm truncate"
+                            style={{ viewTransitionName: `pt-${child.id}` }}>{child.name}</p>
+                          <p className="text-[11px] text-muted">
+                            {age} {th ? "ปี" : "yrs"} ·{" "}
+                            <span className={isM ? "text-primary" : "text-accent"}>
+                              {isM ? (th ? "♂ ชาย" : "♂ M") : (th ? "♀ หญิง" : "♀ F")}
+                            </span>
+                          </p>
+                        </div>
+                        <svg className="w-4 h-4 text-muted/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all flex-shrink-0" aria-hidden="true" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
                       </div>
-                    </div>
-
-                    <span className="text-sm text-muted">
-                      {new Date(child.dateOfBirth).toLocaleDateString(th ? "th-TH" : "en-US")}
-                    </span>
-
-                    <span className="text-sm font-medium text-ink">{age} {th ? "ปี" : "yrs"}</span>
-
-                    <span className={`inline-flex w-fit items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
-                      isM ? "bg-primary/10 text-primary" : "bg-accent/10 text-accent"
-                    }`}>
-                      {isM ? (th ? "♂ ชาย" : "♂ M") : (th ? "♀ หญิง" : "♀ F")}
-                    </span>
-
-                    <div className="flex justify-end">
-                      <svg className="w-4 h-4 text-muted/30 group-hover:text-primary group-hover:translate-x-0.5 transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </Link>
-                );
-              })}
+                    </TransitionLink>
+                  );
+                })}
+              </div>
+              </ScrollFade>
             </div>
-            </ScrollFade>
           </div>
         )}
       </div>

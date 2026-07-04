@@ -7,6 +7,7 @@ import { authApi, childrenApi, assessmentsApi, recommendationsApi, type Child, t
 import { useI18n } from "@/lib/i18n";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { ScrollFade } from "@/components/ScrollFade";
+import { MascotBot } from "@/components/MascotBot";
 
 interface User { id: string; email: string; role: string; profile?: { fullName?: string } }
 
@@ -43,6 +44,7 @@ export default function DashboardPage() {
     (async () => {
       try {
         const { data } = await authApi.me();
+        if (data.role === "admin") { router.replace("/dashboard/admin"); return; }
         setUser(data);
         try {
           const { data: kids } = await childrenApi.list();
@@ -109,7 +111,7 @@ export default function DashboardPage() {
       <main className="min-h-screen relative z-10">
 
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between px-8 py-4 glass border-b border-border/50">
+        <header className="sticky top-0 z-30 flex items-center justify-between pl-16 lg:pl-8 pr-8 py-4 glass border-b border-border/50">
           <div>
             <h1 className="font-display text-xl font-bold text-ink">
               {td.greeting}, {displayName.split(" ")[0] || displayName} 👋
@@ -123,7 +125,7 @@ export default function DashboardPage() {
           {isDoctor && (
             <Link href="/dashboard/patients/new"
               className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 active:scale-[0.98] overflow-hidden"
-              style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.35)" }}>
+              style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 6px 20px rgb(var(--primary)/0.40)" }}>
               <span className="shine relative z-10">{td.addPatient}</span>
             </Link>
           )}
@@ -132,14 +134,14 @@ export default function DashboardPage() {
         <div className="p-8 space-y-6">
 
           {/* Stats grid */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            {stats.map((s) => (
-              <StatCard key={s.label} {...s} barPct={s.barPct} />
+          <div data-tour="stats" className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {stats.map((s, i) => (
+              <StatCard key={s.label} {...s} barPct={s.barPct} index={i} />
             ))}
           </div>
 
           {/* Patient / Children list */}
-          <div className="glass rounded-2xl overflow-hidden">
+          <div data-tour="patient-list" className="glass rounded-2xl overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border/50">
               <div>
                 <h2 className="font-display text-base font-bold text-ink">
@@ -156,7 +158,7 @@ export default function DashboardPage() {
             </div>
 
             {children.length === 0 ? (
-              <EmptyState icon="👶"
+              <EmptyState
                 title={isDoctor ? td.noPatients : td.noChildren}
                 desc={isDoctor ? td.addHint : td.contactHint} />
             ) : (
@@ -196,7 +198,7 @@ export default function DashboardPage() {
 
 
 // ── Stat card ──────────────────────────────────────────────────────────────────
-function StatCard({ label, value, icon, color, trend, barPct }: { label: string; value: number; icon: string; color: string; trend: string; barPct: number }) {
+function StatCard({ label, value, icon, color, trend, barPct, index = 0 }: { label: string; value: number; icon: string; color: string; trend: string; barPct: number; index?: number }) {
   const animated = useCountUp(value);
   const colorMap: Record<string, { text: string; bar: string }> = {
     primary: { text: "text-primary", bar: "bg-primary" },
@@ -206,7 +208,8 @@ function StatCard({ label, value, icon, color, trend, barPct }: { label: string;
   };
   const c = colorMap[color] ?? colorMap.primary;
   return (
-    <div className="group glass rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 cursor-default">
+    <div className="group glass rounded-2xl p-5 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-primary/10 cursor-default animate-reveal-up"
+      style={{ animationDelay: `${index * 80}ms`, animationFillMode: "both" }}>
       <div className="flex items-start justify-between mb-4">
         <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg bg-bg2/60 transition-transform group-hover:scale-110 group-hover:-rotate-6">
           {icon}
@@ -215,7 +218,7 @@ function StatCard({ label, value, icon, color, trend, barPct }: { label: string;
       </div>
       <p className="font-body text-sm font-medium text-ink leading-tight mb-1">{label}</p>
       <p className="font-body text-[11px] text-muted">{trend}</p>
-      <div className="mt-3 h-1 rounded-full bg-border/60 overflow-hidden">
+      <div className="mt-3 h-1.5 rounded-full bg-border/50 overflow-hidden">
         <div className={`h-full rounded-full ${c.bar} transition-all duration-1000`} style={{ width: `${barPct}%` }} />
       </div>
     </div>
@@ -233,12 +236,12 @@ function calcAge(dob: string, unit: string) {
 }
 
 
-function EmptyState({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function EmptyState({ title, desc }: { title: string; desc: string }) {
   return (
-    <div className="py-16 text-center">
-      <div className="text-5xl mb-3 animate-float-soft inline-block">{icon}</div>
+    <div className="py-14 text-center flex flex-col items-center gap-3">
+      <MascotBot size="md" variant="idle" />
       <p className="font-body font-semibold text-ink text-sm">{title}</p>
-      <p className="font-body text-xs text-muted mt-1">{desc}</p>
+      <p className="font-body text-xs text-muted">{desc}</p>
     </div>
   );
 }

@@ -62,7 +62,7 @@ export default function ReportsPage() {
       <div className="fixed top-[-10%] right-[-6%] w-[560px] h-[560px] rounded-full blur-[150px] opacity-[0.12] animate-aurora pointer-events-none"
         style={{ background: "rgb(var(--aurora-3))" }} />
 
-      <header className="sticky top-0 z-30 px-8 py-5 glass border-b border-border/50">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-5 glass border-b border-border/50">
         <h1 className="font-display text-xl font-bold text-ink">{th ? "รายงาน PDF" : "PDF Reports"}</h1>
         <p className="text-xs text-muted mt-0.5">
           {th ? "ผลการประเมินที่เสร็จสิ้น พร้อมพิมพ์เป็นรายงาน" : "Completed assessments ready to print"}

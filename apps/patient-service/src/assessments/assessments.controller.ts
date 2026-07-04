@@ -56,6 +56,20 @@ export class AssessmentsController {
     return this.assessmentsService.markFailed(id);
   }
 
+  // GET /assessments/internal/count — auth-service ขอจำนวน assessment ทั้งหมด (admin stats, internal only)
+  @Get('internal/count')
+  @UseGuards(InternalGuard)
+  async countAll() {
+    return { count: await this.assessmentsService.countAll() };
+  }
+
+  // GET /assessments/internal/all — auth-service ขอรายการ assessment ทั้งหมด (admin scans list, internal only)
+  @Get('internal/all')
+  @UseGuards(InternalGuard)
+  findAllForAdmin() {
+    return this.assessmentsService.findAllForAdmin();
+  }
+
   // GET /assessments/child/:childId — ดูประวัติของเด็ก (แพทย์เจ้าของเคส / ผู้ปกครองของเด็ก)
   @Get('child/:childId')
   findByChild(@Param('childId') childId: string, @Request() req: any) {

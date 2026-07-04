@@ -69,3 +69,7 @@ skills-lock.json
 
 # DB session scratch files (อาจมี credential) — ไม่ขึ้น git
 *.session.sql
+
+# Runtime-uploaded files / dev screenshots — not source
+apps/patient-service/uploads/
+screenshots/

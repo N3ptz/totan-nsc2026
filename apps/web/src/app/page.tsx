@@ -2,11 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { NavSkeleton, HeroSkeleton, FeaturesSkeleton } from "@/components/Skeleton";
 import HeroHand from "@/components/HeroHand";
 import AiPipeline from "@/components/AiPipeline";
+import { LogoMark } from "@/components/LogoMark";
+
+const AiHandModelHero = dynamic(
+  () => import("@/components/three/AiHandModel"),
+  { ssr: false }
+);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Session { name: string; role: string }
@@ -76,14 +83,27 @@ function smoothScrollTo(targetY: number, duration = 1200) {
 export default function Home() {
   const { theme, toggle: toggleTheme } = useTheme();
   const { lang, toggle: toggleLang } = useI18n();
-  const [scrolled, setScrolled] = useState(false);
-  const [session, setSession] = useState<Session | null>(null);
-  const [mounted, setMounted] = useState(false);
+  const [scrolled,   setScrolled]   = useState(false);
+  const [session,    setSession]    = useState<Session | null>(null);
+  const [mounted,    setMounted]    = useState(false);
+  const [heroWebgl,  setHeroWebgl]  = useState(false);
   const heroRef = useRef<HTMLDivElement>(null);
 
   useReveal(mounted);
 
   useEffect(() => { setMounted(true); }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const c = document.createElement("canvas");
+      const ok = !!(window.WebGLRenderingContext && (c.getContext("webgl") || c.getContext("experimental-webgl")));
+      // Only spin up the heavy R3F shader hand on large screens; the polished 2D
+      // HeroHand fallback keeps mobile from allocating an extra WebGL context.
+      const big = window.matchMedia("(min-width: 1024px)").matches;
+      setHeroWebgl(ok && big);
+    } catch { setHeroWebgl(false); }
+  }, [mounted]);
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40);
@@ -145,7 +165,7 @@ export default function Home() {
   const dark = theme === "dark";
 
   if (!mounted) return (
-    <div className="min-h-screen bg-[#04293f] overflow-x-hidden">
+    <div className="min-h-screen bg-[#04293f] overflow-x-clip">
       <NavSkeleton />
       <HeroSkeleton />
       <FeaturesSkeleton />
@@ -153,7 +173,11 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-screen bg-bg overflow-x-hidden">
+    <div className="min-h-screen bg-bg overflow-x-clip">
+      {/* Prerender the login page silently — makes "Get Started" feel instant */}
+      <script type="speculationrules" dangerouslySetInnerHTML={{
+        __html: JSON.stringify({ prerender: [{ urls: ["/login"] }] })
+      }} />
 
       {/* ── Navbar ──────────────────────────────────────────────────────── */}
       <header
@@ -191,7 +215,7 @@ export default function Home() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <button onClick={toggleLang} aria-label="Toggle language"
+          <button onClick={toggleLang} aria-label="Toggle language" data-tour="lang-toggle"
             className={`h-8 px-2.5 rounded-lg text-xs font-display font-semibold transition-all ${
               scrolled ? "border border-border text-muted hover:text-ink hover:border-primary/40" : "border border-white/25 text-white/80 hover:text-white hover:border-white/50"
             }`}>
@@ -203,13 +227,9 @@ export default function Home() {
             }`}>
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
-          <Link href={session ? "/dashboard" : "/login"}
-            className={`group relative overflow-hidden h-8 px-4 flex items-center gap-1.5 rounded-lg text-sm font-body font-semibold transition-all active:scale-95 ${
-              scrolled
-                ? "text-white shadow-lg shadow-primary/25"
-                : "bg-white text-primary-dark hover:bg-white/90"
-            }`}
-            style={scrolled ? { background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" } : undefined}>
+          <Link href={session ? "/dashboard" : "/login"} data-tour="nav-cta"
+            className={`group relative overflow-hidden h-8 px-4 flex items-center gap-1.5 rounded-lg text-sm font-body font-semibold transition-all active:scale-95 text-white shadow-lg shadow-primary/30`}
+            style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))" }}>
             <span className="shine relative z-10">{session ? "Dashboard" : (th ? "เริ่มใช้งาน" : "Get Started")}</span>
           </Link>
         </div>
@@ -233,67 +253,80 @@ export default function Home() {
             {/* ── Left: copy ──────────────────────────────────────── */}
             <div className="text-center lg:text-left space-y-7 max-w-xl mx-auto lg:mx-0">
               {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-body font-semibold text-white/90 animate-fade-up"
-                style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.18)", backdropFilter: "blur(10px)" }}>
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-body font-semibold text-white animate-fade-up"
+                style={{ background: "rgba(255,255,255,0.10)", border: "1px solid rgba(255,255,255,0.22)", backdropFilter: "blur(12px)" }}>
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75 animate-ping" />
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
                 </span>
-                AI-Powered · Greulich &amp; Pyle Standard
+                {th ? "AI · มาตรฐาน Greulich & Pyle" : "AI-Powered · Greulich & Pyle Standard"}
               </div>
 
-              {/* Heading */}
+              {/* Heading — short, punchy, 3-second comprehension */}
               <h1 id="hero-heading"
-                className="font-display font-bold text-white leading-[1.06] animate-fade-up animate-delay-100"
-                style={{ fontSize: "clamp(2.5rem, 5.2vw, 4.5rem)", textWrap: "balance", letterSpacing: "-0.03em" }}>
+                className="font-display font-bold text-white leading-[1.05] animate-fade-up animate-delay-100"
+                style={{ fontSize: "clamp(2.6rem, 5.4vw, 4.8rem)", letterSpacing: "-0.035em" }}>
                 {th ? (
-                  <>ประเมินอายุกระดูก{" "}
-                  <span className="text-gradient" style={{ filter: "brightness(1.25)" }}>ด้วย AI</span>{" "}
-                  สำหรับเด็กไทย</>
+                  <>ติดตามการเจริญเติบโต{" "}
+                  <span className="text-gradient" style={{ filter: "brightness(1.3)" }}>ด้วยปัญญา AI</span>
+                </>
                 ) : (
-                  <>Bone Age Assessment{" "}
-                  <span className="text-gradient" style={{ filter: "brightness(1.25)" }}>Powered by AI</span>{" "}
-                  for Thai Children</>
+                  <>Growth Intelligence{" "}
+                  <span className="text-gradient" style={{ filter: "brightness(1.3)" }}>Powered by AI</span>
+                </>
                 )}
               </h1>
 
-              <p className="font-body text-white/75 mx-auto lg:mx-0 animate-fade-up animate-delay-200"
-                style={{ fontSize: "clamp(1rem, 1.4vw, 1.15rem)", maxWidth: "50ch", lineHeight: 1.7 }}>
+              <p className="font-body mx-auto lg:mx-0 animate-fade-up animate-delay-200"
+                style={{ fontSize: "clamp(1rem, 1.4vw, 1.125rem)", maxWidth: "48ch", lineHeight: 1.72, color: "rgba(255,255,255,0.88)" }}>
                 {th
-                  ? "แพทย์อัปโหลด X-ray มือซ้าย AI วิเคราะห์ตามมาตรฐาน Greulich & Pyle ส่งผลและ recommendation ถึงผู้ปกครองได้ใน 2 นาที"
-                  : "Upload a left-hand X-ray. AI analyzes against the Greulich & Pyle atlas. Send results and a recommendation to parents within 2 minutes."}
+                  ? "แพทย์อัปโหลด X-ray มือซ้าย AI วิเคราะห์ตามมาตรฐาน Greulich & Pyle ส่งผลและคำแนะนำถึงผู้ปกครองภายใน 2 นาที"
+                  : "Upload a left-hand X-ray. AI analyzes against the Greulich & Pyle atlas and sends results to parents in under 2 minutes."}
               </p>
 
               {/* CTA */}
               <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 animate-fade-up animate-delay-300">
                 <Link href={session ? "/dashboard" : "/login"}
-                  className="group relative inline-flex items-center gap-2.5 font-body font-semibold text-white px-8 py-4 rounded-2xl transition-all hover:-translate-y-0.5 active:scale-[0.97] overflow-hidden"
-                  style={{ background: "linear-gradient(120deg,#EA6C49,#F59E0B)", boxShadow: "0 10px 30px rgba(234,108,73,0.45)", fontSize: "1rem" }}>
+                  className="group relative inline-flex items-center gap-2.5 font-body font-semibold text-white px-8 py-4 rounded-2xl transition-all hover:-translate-y-0.5 hover:shadow-2xl active:scale-[0.97] overflow-hidden"
+                  style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 10px 32px rgba(14,165,233,0.50)", fontSize: "1rem" }}>
                   <span className="shine relative z-10 flex items-center gap-2.5">
                     {session ? (th ? "กลับสู่ Dashboard" : "Back to Dashboard") : (th ? "เริ่มใช้งานฟรี" : "Start for Free")}
                     <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
                   </span>
                 </Link>
                 <a href="#how"
-                  className="inline-flex items-center gap-2 font-body font-medium text-white/85 hover:text-white text-sm transition-colors px-4 py-4 rounded-xl hover:bg-white/10">
+                  className="inline-flex items-center gap-2 font-body font-medium text-sm transition-colors px-4 py-4 rounded-xl hover:text-white hover:bg-white/10"
+                  style={{ color: "rgba(255,255,255,0.80)" }}>
                   {th ? "ดูวิธีการทำงาน" : "See how it works"}
                   <span className="opacity-70 animate-bounce">↓</span>
                 </a>
               </div>
+
             </div>
 
-            {/* ── Right: interactive 3D bone hand ─────────────────── */}
-            <div className="relative animate-fade-in animate-delay-500">
-              <HeroHand lang={lang} />
+            {/* ── Right: 3D holographic hand (R3F) with 2D fallback ── */}
+            <div className="relative animate-fade-in animate-delay-500 flex items-center justify-center">
+              <div className="relative w-full mx-auto" style={{ maxWidth: 460, aspectRatio: "5 / 6" }}>
+                {/* Ambient halo beneath the model */}
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-[6%] w-[72%] h-[22%] rounded-[50%] blur-3xl pointer-events-none"
+                  style={{ background: "radial-gradient(ellipse, rgba(56,189,248,0.50), transparent 70%)" }} />
+                {mounted && heroWebgl ? (
+                  <AiHandModelHero step={0} interactive={true} th={th} fov={40} />
+                ) : (
+                  <HeroHand lang={lang} />
+                )}
+              </div>
             </div>
           </div>
 
-          {/* Scroll cue */}
-          <div className="absolute bottom-7 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10">
-            <div className="w-5 h-8 rounded-full border-2 border-white/30 flex justify-center pt-1.5">
-              <div className="w-1 h-1.5 rounded-full bg-white/70 animate-bounce" />
+          {/* Scroll cue — hides once user scrolls */}
+          {!scrolled && (
+            <div className="absolute bottom-7 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10 transition-opacity duration-500">
+              <div className="w-5 h-8 rounded-full border-2 border-white/30 flex justify-center pt-1.5">
+                <div className="w-1 h-1.5 rounded-full bg-white/70 animate-bounce" />
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Bottom wave */}
           <svg className="absolute bottom-0 left-0 w-full" viewBox="0 0 1440 120" fill="none" preserveAspectRatio="none" style={{ height: 70, zIndex: 10 }}>
@@ -301,39 +334,8 @@ export default function Home() {
           </svg>
         </section>
 
-        {/* ── How the AI analyzes (pipeline) ──────────────────────────────── */}
-        <section id="ai" aria-labelledby="ai-heading" className="relative min-h-[100svh] flex flex-col justify-center py-12 px-6 overflow-hidden"
-          style={{ background: dark
-            ? "linear-gradient(180deg, #060d1a 0%, #081427 60%, #060d1a 100%)"
-            : "linear-gradient(180deg, #eef5fc 0%, #e3eefb 55%, #eef5fc 100%)" }}>
-          <div className="absolute inset-0 pointer-events-none" style={{ opacity: dark ? 0.05 : 0.08,
-            backgroundImage: `radial-gradient(circle, ${dark ? "#38BDF8" : "#0EA5E9"} 1px, transparent 1px)`, backgroundSize: "32px 32px" }} />
-          <div className="absolute top-10 -right-40 w-[520px] h-[520px] rounded-full blur-[150px] pointer-events-none"
-            style={{ background: "#0EA5E9", opacity: dark ? 0.2 : 0.16 }} />
-          <div className="absolute bottom-0 -left-40 w-[480px] h-[480px] rounded-full blur-[150px] pointer-events-none"
-            style={{ background: "#EA6C49", opacity: dark ? 0.15 : 0.12 }} />
-
-          <div className="relative max-w-6xl mx-auto w-full">
-            <div className="reveal mb-5 text-center">
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-display font-bold tracking-[0.16em] uppercase mb-2.5"
-                style={{ background: dark ? "rgba(56,189,248,0.12)" : "rgba(2,132,199,0.10)", color: dark ? "#7dd3fc" : "#0284C7", border: `1px solid ${dark ? "rgba(56,189,248,0.25)" : "rgba(2,132,199,0.22)"}` }}>
-                Explainable · Fair · Deep Learning
-              </span>
-              <h2 id="ai-heading" className="font-display font-bold text-ink"
-                style={{ fontSize: "clamp(1.6rem, 3.4vw, 2.5rem)", letterSpacing: "-0.025em", textWrap: "balance" }}>
-                {th ? "AI คิดอะไรอยู่กันแน่" : "What the AI is really thinking"}
-              </h2>
-            </div>
-
-            {/* dark showcase stage — keeps the holographic pipeline readable on any theme */}
-            <div className="relative rounded-3xl p-4 md:p-7 overflow-hidden"
-              style={{ background: dark ? "transparent" : "linear-gradient(180deg,#081427,#060d1a)",
-                border: dark ? "1px solid rgba(56,189,248,0.10)" : "1px solid rgba(56,189,248,0.18)",
-                boxShadow: dark ? "none" : "0 24px 60px rgba(6,13,26,0.28)" }}>
-              <AiPipeline lang={lang} />
-            </div>
-          </div>
-        </section>
+        {/* ── AI Pipeline — scroll-driven scrollytelling ───────────────────── */}
+        <AiPipeline lang={lang} />
 
         {/* ── How it works ────────────────────────────────────────────────── */}
         <section id="how" aria-labelledby="how-heading" className="relative min-h-[100svh] flex flex-col justify-center py-12 px-6 bg-bg overflow-hidden">
@@ -627,38 +629,13 @@ export default function Home() {
           </div>
         </section>
       </main>
-
-      {/* ── Footer ──────────────────────────────────────────────────────── */}
-      <footer role="contentinfo" className="py-9 px-6 border-t border-border bg-bg">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <LogoMark scrolled />
-            <span className="font-display font-bold text-ink">โตทัน</span>
-            <span className="font-body text-xs text-muted">· NSC 2026 · Mahidol University</span>
-          </div>
-          <p className="font-body text-xs text-muted text-center">
-            {th
-              ? "ระบบประเมินอายุกระดูกและติดตามการเจริญเติบโตสำหรับเด็กไทย"
-              : "Bone age assessment and growth monitoring for Thai children"}
-          </p>
-          <div className="flex items-center gap-3">
-            <button onClick={toggleLang} className="font-body text-xs font-medium text-muted hover:text-ink transition-colors">
-              {th ? "English" : "ภาษาไทย"}
-            </button>
-            <span className="text-border" aria-hidden>·</span>
-            <button onClick={toggleTheme} aria-label="Toggle theme" className="text-muted hover:text-ink transition-colors">
-              {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-            </button>
-          </div>
-        </div>
-      </footer>
     </div>
   );
 }
 
 // ── Aurora field (animated mesh blobs) ──────────────────────────────────────────
 function AuroraField({ subtle = false }: { subtle?: boolean }) {
-  const o = subtle ? 0.22 : 0.4;
+  const o = subtle ? 0.15 : 0.25;
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none"
       style={{ transform: "translate3d(var(--mx,0),var(--my,0),0)", transition: "transform 0.3s ease-out", zIndex: 2 }}>
@@ -716,19 +693,6 @@ function StaticStat({ value, label }: { value: string; label: string }) {
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
-function LogoMark({ scrolled = false }: { scrolled?: boolean }) {
-  return (
-    <div className="w-8 h-8 rounded-xl flex items-center justify-center transition-all"
-      style={scrolled
-        ? { background: "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 4px 14px rgba(14,165,233,0.4)" }
-        : { background: "rgba(255,255,255,0.15)", border: "1px solid rgba(255,255,255,0.25)" }}>
-      <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-      </svg>
-    </div>
-  );
-}
-
 function ArrowRight({ className = "" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -1008,11 +972,19 @@ function ParentPreview({ th }: { th: boolean }) {
 
 function XrayIcon({ className = "" }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7}>
-      <rect x="3" y="11" width="8" height="9" rx="1" />
-      <rect x="4" y="5" width="2" height="7" rx="1" /><rect x="7" y="3" width="2" height="9" rx="1" />
-      <rect x="10" y="4" width="2" height="8" rx="1" /><rect x="13" y="6" width="1.5" height="7" rx="0.75" />
-      <rect x="3" y="20" width="8" height="1" rx="0.5" />
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+      {/* X-ray film frame */}
+      <rect x="3" y="2" width="18" height="20" rx="1.5" />
+      {/* Wrist / carpal block */}
+      <rect x="7" y="14.5" width="10" height="6" rx="2" />
+      {/* Finger bones — index, middle (tallest), ring, pinky */}
+      <rect x="7"  y="7.5" width="2" height="8"   rx="1" />
+      <rect x="10" y="5.5" width="2" height="10"  rx="1" />
+      <rect x="13" y="6"   width="2" height="9.5" rx="1" />
+      <rect x="16" y="8.5" width="2" height="7"   rx="1" />
+      {/* Thumb — curves out from the wrist toward the lower-left */}
+      <path d="M7 19.5 C6 17 4.5 15 5.5 12" />
     </svg>
   );
 }

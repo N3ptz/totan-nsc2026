@@ -5,10 +5,12 @@ import axios from 'axios';
 // Route map: prefix → service URL
 const ROUTES: Record<string, string> = {
   '/auth':        process.env.AUTH_SERVICE_URL    ?? 'http://localhost:3001',
+  '/admin':       process.env.AUTH_SERVICE_URL    ?? 'http://localhost:3001',
   '/children':    process.env.PATIENT_SERVICE_URL ?? 'http://localhost:3002',
   '/assessments': process.env.PATIENT_SERVICE_URL ?? 'http://localhost:3002',
   '/recommendations': process.env.PATIENT_SERVICE_URL ?? 'http://localhost:3002',
   '/ai':          process.env.AI_SERVICE_URL      ?? 'http://localhost:8000',
+  '/notify':      process.env.NOTIFY_SERVICE_URL  ?? 'http://localhost:3004',
 };
 
 @Controller()

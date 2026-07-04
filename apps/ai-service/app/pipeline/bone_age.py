@@ -10,6 +10,7 @@ from .growth_standards import (
     weight_zscore_percentile,
     bmi_zscore_percentile,
 )
+from .bayley_pinneau import predict_adult_height_cm
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class BoneAgePipeline:
     Bone Age Assessment Pipeline
 
     DeepLabV3 (segmentation) → YOLOv11 (ROI detection) → ConvNeXt Tiny (age prediction)
-    → Grad-CAM (heatmap) → TW3 (Final Adult Height) → Thai Growth Standards 2564
+    → Grad-CAM (heatmap) → Bayley-Pinneau (Final Adult Height) → Thai Growth Standards 2564
 
     ────────────────────────────────────────────────────────────────────
     สิ่งที่ต้อง implement เพิ่ม:
@@ -73,7 +74,8 @@ class BoneAgePipeline:
         2. YOLOv11    — detect ROI: Carpals, Phalanges, RadiusUlna
         3. ConvNeXt   — predict bone age per ROI → weighted average → boneAgeMonths
         4. Grad-CAM   — สร้าง heatmap → upload → heatmapUrl
-        5. TW3        — คำนวณ finalAdultHeightCm + targetHeightCm
+        5. Bayley-Pinneau — คำนวณ finalAdultHeightCm (จาก bone age + height)
+           + targetHeightCm (mid-parental target, จาก father/mother height)
         6. Thai Growth Standards 2564
                       — heightPercentile, heightSdScore, bmi, bmiPercentile, riskFlag
         """
@@ -100,14 +102,10 @@ class BoneAgePipeline:
         bone_age_months = max(6, chron_age_months + deviation)
         confidence = round((0.82 + random.random() * 0.14) * 1000) / 1000
 
-        risk_flag = "normal"
-        if deviation <= -6:
-            risk_flag = "delayed"
-        elif deviation >= 6:
-            risk_flag = "advanced"
+        risk_flag = self._classify_deviation(deviation)
 
         target_height_cm = self._target_height(sex, father_height_cm, mother_height_cm)
-        final_adult_height_cm = self._final_adult_height(bone_age_months, height_cm)
+        final_adult_height_cm = self._final_adult_height(sex, bone_age_months, height_cm)
 
         height_percentile, height_sd_score, risk_flag = self._height_stats(
             sex, height_cm, chron_age_months, risk_flag
@@ -147,18 +145,57 @@ class BoneAgePipeline:
             return 120
 
     @staticmethod
+    def _classify_deviation(deviation_months: int) -> str:
+        """
+        Bone age (BA) vs chronological age (CA) — "advanced"/"delayed" flag.
+
+        Threshold: |BA - CA| >= 24 months (~2 SD) is the standard clinical
+        cutoff for a significant discrepancy warranting workup/referral;
+        differences under ~12 months (~1 SD) are commonly normal variation.
+        The true SD is age/sex/method-dependent (no single public numeric
+        table exists for it, similar to the Bayley-Pinneau situation), but
+        multiple independent reproducibility studies converge on SD ~= 1
+        year, making a flat 12/24-month cutoff a defensible approximation —
+        NOT the previous +/-6 months, which had no citation and sits well
+        inside what the literature calls normal variation.
+
+        Sources:
+          - AMBOSS Pediatric Endocrinology (resident teaching reference):
+            "bone age >2 SD above/below chronological age" = advanced/delayed;
+            "<1 year often normal", ">=2 years -> refer to endocrinology".
+          - Medscape/eMedicine, "Constitutional Growth Delay": bone age
+            "delayed by longer than 1 year and often by 2 years or more"
+            as the diagnostic hallmark.
+          - Bull RK, Edwards PD, Kemp PM, Fry S, Hughes IA. "Bone age
+            assessment: a large scale comparison of the Greulich and Pyle
+            and Tanner and Whitehouse (TW2) methods." Arch Dis Child.
+            1999;81(2):172-3. (PMID 10490531) — real-world BA assessment
+            reproducibility data underlying the ~1-year SD approximation.
+
+        This only sets the stored normal/advanced/delayed flag (the
+        `riskFlag` enum column has a fixed value set — no "mild" tier here
+        without a migration). The finer 5-tier classification with
+        patient-facing clinical-advice text lives client-side in
+        apps/web/src/lib/boneAgeClassification.ts, computed from the same
+        boneAgeMonths/chronAgeMonths already available on the assessment —
+        no backend change needed to add that nuance.
+        """
+        if deviation_months >= 24:
+            return "advanced"
+        if deviation_months <= -24:
+            return "delayed"
+        return "normal"
+
+    @staticmethod
     def _target_height(sex: str, father_cm: float | None, mother_cm: float | None) -> float | None:
         if not father_cm or not mother_cm:
             return None
         return (father_cm + mother_cm + 13) / 2 if sex == "M" else (father_cm + mother_cm - 13) / 2
 
     @staticmethod
-    def _final_adult_height(bone_age_months: int, height_cm: float | None) -> float | None:
-        if not height_cm or height_cm <= 0:
-            return None
-        bone_age_years = bone_age_months / 12
-        mult = 1.18 if bone_age_years < 11 else (1.10 if bone_age_years < 13 else 1.04)
-        return round(height_cm * mult * 10) / 10
+    def _final_adult_height(sex: str, bone_age_months: int, height_cm: float | None) -> float | None:
+        """Bayley-Pinneau prediction — see pipeline/bayley_pinneau.py for method + citation."""
+        return predict_adult_height_cm(sex, bone_age_months, height_cm)
 
     @staticmethod
     def _height_stats(

@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Assessment, AssessmentStatus } from './assessment.entity';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import { AiResultDto } from './dto/ai-result.dto';
@@ -261,6 +261,20 @@ export class AssessmentsService {
       .catch((err) => this.logger.warn(`Redis publish failed (non-fatal): ${err.message}`));
 
     return this.findOne(id);
+  }
+
+  // ── Admin (internal only) — สำหรับ auth-service admin dashboard ──
+  async countAll(): Promise<number> {
+    return this.assessmentRepo.count();
+  }
+
+  async findAllForAdmin() {
+    const rows = await this.assessmentRepo.find({ order: { createdAt: 'DESC' } });
+    if (rows.length === 0) return [];
+    const childIds = [...new Set(rows.map(r => r.childId))];
+    const children = await this.childRepo.find({ where: { id: In(childIds) } });
+    const nameById = new Map(children.map(c => [c.id, c.name]));
+    return rows.map(r => ({ ...r, childName: nameById.get(r.childId) ?? null }));
   }
 
   // จำนวนเดือนระหว่างวันเกิด → วันตรวจ

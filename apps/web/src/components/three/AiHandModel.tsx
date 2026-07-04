@@ -411,11 +411,11 @@ function Rig({ step, interactive, th }: { step: number; interactive: boolean; th
   );
 }
 
-export default function AiHandModel({ step = 0, interactive = true, th = false }: { step?: number; interactive?: boolean; th?: boolean }) {
+export default function AiHandModel({ step = 0, interactive = true, th = false, fov = 50 }: { step?: number; interactive?: boolean; th?: boolean; fov?: number }) {
   return (
     <Canvas
-      camera={{ position: [0, 0, 11.2], fov: 38 }}
-      dpr={[1, 2]}
+      camera={{ position: [0, 0, 10], fov }}
+      dpr={[1, 1.5]}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
       style={{ background: "transparent" }}
     >
