@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtMiddleware } from './middleware/jwt.middleware';
 import { RateLimitMiddleware } from './middleware/rate-limit.middleware';
+import { HealthController } from './health.controller';
 import { ProxyController } from './proxy/proxy.controller';
 
 @Module({
@@ -12,7 +13,8 @@ import { ProxyController } from './proxy/proxy.controller';
       useFactory: () => ({ secret: process.env.JWT_SECRET }),
     }),
   ],
-  controllers: [ProxyController],
+  // HealthController ต้องมาก่อน ProxyController — ไม่งั้นโดน @All('*') ดักไปก่อน
+  controllers: [HealthController, ProxyController],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

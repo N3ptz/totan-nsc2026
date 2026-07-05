@@ -1,6 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# อนุญาตให้ dependency พวกนี้รัน postinstall script (pnpm v11 บล็อกโดย default)
+# ถ้าไม่ตั้ง pnpm จะ fail ตอน install ใน Docker ด้วย ERR_PNPM_IGNORED_BUILDS
 allowBuilds:
-  '@nestjs/core': set this to true or false
-  protobufjs: set this to true or false
+  "@nestjs/core": true
+  protobufjs: true

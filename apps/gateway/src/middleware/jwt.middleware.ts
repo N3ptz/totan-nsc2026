@@ -4,6 +4,7 @@ import { Request, Response, NextFunction } from 'express';
 
 // PUBLIC routes ที่ไม่ต้อง login (เทียบแบบ exact path เพื่อกัน /auth/login-xxx หลุด)
 const PUBLIC_PATHS = new Set([
+  '/health', // health ของ gateway เอง (Railway healthcheck)
   '/auth/login',
   '/auth/register',
   '/auth/health',

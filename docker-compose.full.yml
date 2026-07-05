@@ -1,0 +1,98 @@
+# ─── รันทั้งระบบใน Docker (โครงเดียวกับ production บน Railway) ───────────────
+# ใช้คู่กับ infra เดิมใน docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.full.yml up -d --build
+# ⚠️ ปิด dev servers (pnpm dev) ก่อน — พอร์ต 3000-3004/8000 ชนกัน
+# หมายเหตุ: web ไม่อยู่ในนี้ (deploy บน Vercel) — dev รัน `pnpm dev:web` ชี้ gateway :3000
+
+services:
+  gateway:
+    build: { context: ., dockerfile: apps/gateway/Dockerfile }
+    container_name: totan-gateway
+    restart: unless-stopped
+    ports: ["3000:3000"]
+    environment:
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-change_this_to_a_long_random_string}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      PATIENT_SERVICE_URL: http://patient-service:3002
+      AI_SERVICE_URL: http://ai-service:8000
+      NOTIFY_SERVICE_URL: http://notify-service:3004
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3100}
+    depends_on: [auth-service, patient-service, ai-service, notify-service]
+    networks: [totan-net]
+
+  auth-service:
+    build: { context: ., dockerfile: apps/auth-service/Dockerfile }
+    container_name: totan-auth
+    restart: unless-stopped
+    environment:
+      PORT: 3001
+      DATABASE_URL: postgresql://totan:totan_secret@postgres-auth:5432/totan_auth
+      JWT_SECRET: ${JWT_SECRET:-change_this_to_a_long_random_string}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-change_this_to_a_long_random_string}
+      PATIENT_SERVICE_URL: http://patient-service:3002
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SUPABASE_PROJECT_REF: ${SUPABASE_PROJECT_REF:-}
+      SUPABASE_S3_ACCESS_KEY: ${SUPABASE_S3_ACCESS_KEY:-}
+      SUPABASE_S3_SECRET_KEY: ${SUPABASE_S3_SECRET_KEY:-}
+      STORAGE_BUCKET_NAME: ${STORAGE_BUCKET_NAME:-totan}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
+    depends_on:
+      postgres-auth: { condition: service_healthy }
+    networks: [totan-net]
+
+  patient-service:
+    build: { context: ., dockerfile: apps/patient-service/Dockerfile }
+    container_name: totan-patient
+    restart: unless-stopped
+    # เปิดพอร์ตออก host เพื่อให้ browser โหลดไฟล์ local-upload ได้ (โหมดยังไม่ตั้ง Supabase)
+    ports: ["3002:3002"]
+    environment:
+      PORT: 3002
+      DATABASE_URL: postgresql://totan:totan_secret@postgres-patient:5432/totan_patient
+      REDIS_URL: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth-service:3001
+      AI_SERVICE_URL: http://ai-service:8000
+      WEB_URL: ${WEB_URL:-http://localhost:3100}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3002}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-change_this_to_a_long_random_string}
+      SUPABASE_PROJECT_REF: ${SUPABASE_PROJECT_REF:-}
+      SUPABASE_S3_ACCESS_KEY: ${SUPABASE_S3_ACCESS_KEY:-}
+      SUPABASE_S3_SECRET_KEY: ${SUPABASE_S3_SECRET_KEY:-}
+      STORAGE_BUCKET_NAME: ${STORAGE_BUCKET_NAME:-totan}
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL:-}
+    depends_on:
+      postgres-patient: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    networks: [totan-net]
+
+  notify-service:
+    build: { context: ., dockerfile: apps/notify-service/Dockerfile }
+    container_name: totan-notify
+    restart: unless-stopped
+    environment:
+      PORT: 3004
+      REDIS_URL: redis://redis:6379
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+    depends_on:
+      redis: { condition: service_healthy }
+    networks: [totan-net]
+
+  ai-service:
+    build: { context: ., dockerfile: apps/ai-service/Dockerfile }
+    container_name: totan-ai
+    restart: unless-stopped
+    environment:
+      PORT: 8000
+      PATIENT_SERVICE_URL: http://patient-service:3002
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-change_this_to_a_long_random_string}
+      DEVICE: cpu
+    networks: [totan-net]

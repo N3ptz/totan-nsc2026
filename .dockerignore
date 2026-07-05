@@ -1,0 +1,18 @@
+# ลด build context — Dockerfiles COPY เฉพาะ path ที่ใช้อยู่แล้ว
+# แต่ของหนัก ๆ พวกนี้ห้ามหลุดเข้า context เด็ดขาด
+node_modules
+**/node_modules
+**/dist
+**/.next
+.git
+.vscode
+docs
+screenshots
+video
+scripts/screenshot-*.js
+apps/patient-service/uploads
+apps/web/public/*.mp4
+apps/web/public/*.glb
+**/.env
+**/.env.*
+!**/.env.example
