@@ -47,6 +47,21 @@ export function FahThChart({ assessments, lang }: { assessments: Assessment[]; l
 
   const lastFah = fahPts[fahPts.length - 1];
 
+  // ── Label collision: เช็คกล่องข้อความสองป้ายจริง ๆ ไม่ใช่แค่จับมุมคนละฝั่ง ──
+  // (ป้ายใช้ font 10-11px — ประมาณความกว้างคงที่พอสำหรับกันชน เพราะ SSR วัด SVG จริงไม่ได้)
+  const TH_LABEL_W = 72, FAH_LABEL_W = 84, LABEL_H = 12;
+  const fahLabelY = Math.max(PY + 8, lastFah.y - 10);
+  let thLabelY = thPts.length > 0 ? Math.max(PY + 8, thPts[0].y - 6) : 0;
+  if (thPts.length > 0) {
+    const thBoxRight = PX + 4 + TH_LABEL_W;            // TH ป้ายชิดซ้าย ยื่นไปขวา
+    const fahBoxLeft = lastFah.x - 6 - FAH_LABEL_W;    // FAH anchored end ยื่นมาซ้าย
+    const xOverlap = fahBoxLeft < thBoxRight;
+    if (xOverlap && Math.abs(fahLabelY - thLabelY) < LABEL_H) {
+      // ชนกัน (FAH ≈ TH และจุดล่าสุดอยู่ใกล้ฝั่งซ้าย) — ย้าย TH ลงใต้เส้นแทน
+      thLabelY = Math.min(PY + iH - 4, thPts[0].y + 14);
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-3 flex-wrap">
@@ -106,11 +121,9 @@ export function FahThChart({ assessments, lang }: { assessments: Assessment[]; l
             <circle key={i} cx={p.x} cy={p.y} r="4" fill="rgb(var(--warning))" stroke="rgb(var(--surface))" strokeWidth="2" />
           ))}
 
-          {/* TH label: pinned to the left edge of its constant reference line — never
-              competes for space with the FAH labels, which live at the most recent point.
-              Clamped so it can't clip above the plot area when TH sits near the top of the range. */}
+          {/* TH label: ชิดซ้ายบนเส้นอ้างอิง — ถ้ากล่องชนกับป้าย FAH (เช็คด้านบน) จะย้ายลงใต้เส้น */}
           {thConst && (
-            <text x={PX + 4} y={Math.max(PY + 8, thPts[0].y - 6)} textAnchor="start" fontSize="10" fontWeight="700" fill="rgb(var(--warning))">
+            <text x={PX + 4} y={thLabelY} textAnchor="start" fontSize="10" fontWeight="700" fill="rgb(var(--warning))">
               TH {thConst} cm
             </text>
           )}
@@ -118,7 +131,7 @@ export function FahThChart({ assessments, lang }: { assessments: Assessment[]; l
           {/* FAH label: always at the most recent point (the clinically relevant value),
               anchored "end" with a left-hand offset so it never clips past the right edge. */}
           {lastFah && (
-            <text x={lastFah.x - 6} y={Math.max(PY + 8, lastFah.y - 10)} textAnchor="end" fontSize="11" fontWeight="700" fill="rgb(var(--accent))">
+            <text x={lastFah.x - 6} y={fahLabelY} textAnchor="end" fontSize="11" fontWeight="700" fill="rgb(var(--accent))">
               FAH {lastFah.v} cm
             </text>
           )}

@@ -96,24 +96,21 @@ export class AssessmentsService {
 
   // AI เรียก endpoint นี้เพื่อบันทึกผล (ผ่าน InternalGuard + AiResultDto แล้ว)
   async saveAiResult(assessmentId: string, result: AiResultDto) {
-    const exists = await this.assessmentRepo.findOne({ where: { id: assessmentId } });
-    if (!exists) throw new NotFoundException('ไม่พบข้อมูลการประเมิน');
-
-    await this.assessmentRepo.update(assessmentId, {
+    // ไม่ pre-check ด้วย findOne — ใช้ affected ของ update แทน (ตัดเหลือ 2 query จาก 3)
+    const { affected } = await this.assessmentRepo.update(assessmentId, {
       ...result,
       status: AssessmentStatus.COMPLETED,
     } as Partial<Assessment>);
+    if (!affected) throw new NotFoundException('ไม่พบข้อมูลการประเมิน');
 
-    const assessment = await this.assessmentRepo.findOne({ where: { id: assessmentId } });
     // ไม่แจ้งเตือนหมออัตโนมัติแล้ว — หมอ review ผลแล้วกด "ส่งผลให้ผู้ปกครอง" เอง (ดู notifyParent)
-    return assessment;
+    return this.findOne(assessmentId);
   }
 
   // AI แจ้งว่า pipeline ล้มเหลว — เปลี่ยนสถานะเป็น failed (ไม่ค้าง processing ตลอดไป)
   async markFailed(assessmentId: string) {
-    const exists = await this.assessmentRepo.findOne({ where: { id: assessmentId } });
-    if (!exists) throw new NotFoundException('ไม่พบข้อมูลการประเมิน');
-    await this.assessmentRepo.update(assessmentId, { status: AssessmentStatus.FAILED });
+    const { affected } = await this.assessmentRepo.update(assessmentId, { status: AssessmentStatus.FAILED });
+    if (!affected) throw new NotFoundException('ไม่พบข้อมูลการประเมิน');
     return { message: 'marked as failed' };
   }
 
