@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
@@ -112,9 +113,13 @@ export function GrowthChart({
   lang: string;
 }) {
   const th = lang === "th";
-  const completed = assessments
-    .filter(a => a.heightCm && a.status === "completed")
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  // อยู่ในหน้า patient detail ที่ re-render บ่อย — memo กัน filter/sort/interpolate WHO ซ้ำทุกรอบ
+  const { completed, data } = useMemo(() => {
+    const done = assessments
+      .filter(a => a.heightCm && a.status === "completed")
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    return { completed: done, data: buildChartData(done, child) };
+  }, [assessments, child]);
 
   if (completed.length === 0) return (
     <div className="flex flex-col items-center justify-center py-10 text-center gap-3">
@@ -130,7 +135,6 @@ export function GrowthChart({
   );
 
   const isSingle = completed.length === 1;
-  const data = buildChartData(completed, child);
 
   return (
     <div className="space-y-3">

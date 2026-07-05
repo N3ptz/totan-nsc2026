@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param, Request, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Body, Param, Query, Request, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AssessmentsService } from './assessments.service';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
@@ -63,11 +63,11 @@ export class AssessmentsController {
     return { count: await this.assessmentsService.countAll() };
   }
 
-  // GET /assessments/internal/all — auth-service ขอรายการ assessment ทั้งหมด (admin scans list, internal only)
+  // GET /assessments/internal/all — auth-service ขอรายการ assessment ล่าสุด (admin scans list, internal only)
   @Get('internal/all')
   @UseGuards(InternalGuard)
-  findAllForAdmin() {
-    return this.assessmentsService.findAllForAdmin();
+  findAllForAdmin(@Query('limit') limit?: string) {
+    return this.assessmentsService.findAllForAdmin(limit ? Number(limit) : undefined);
   }
 
   // GET /assessments/child/:childId — ดูประวัติของเด็ก (แพทย์เจ้าของเคส / ผู้ปกครองของเด็ก)

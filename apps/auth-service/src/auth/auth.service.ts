@@ -29,7 +29,9 @@ export class AuthService {
   ) {}
 
   private static readonly MAX_OTP_ATTEMPTS = 5;
-  private static readonly DEV_MODE = process.env.NODE_ENV !== 'production';
+  // ต้อง opt-in ชัดเจนเท่านั้น — ถ้าผูกกับ NODE_ENV แล้วลืมตั้งใน production
+  // ระบบยืนยัน email จะถูกข้ามทั้งระบบแบบเงียบ ๆ (fail-open)
+  private static readonly DEV_AUTO_VERIFY = process.env.DEV_AUTO_VERIFY === 'true';
 
   private generateOtp(): string {
     // ใช้ crypto.randomInt — Math.random() เดาได้ ไม่เหมาะกับรหัสยืนยัน
@@ -69,7 +71,7 @@ export class AuthService {
     }
 
     // Dev: auto-verify immediately so new accounts work without SMTP configured
-    if (AuthService.DEV_MODE) {
+    if (AuthService.DEV_AUTO_VERIFY) {
       await this.userRepo.update(user.id, {
         status: UserStatus.ACTIVE,
         verifyOtp: null,

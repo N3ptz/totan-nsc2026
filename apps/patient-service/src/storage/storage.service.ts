@@ -64,7 +64,9 @@ export class StorageService {
       const filePath = join(uploadsDir, filename);
       writeFileSync(filePath, file.buffer);
       const port = process.env.PORT ?? 3002;
-      const url = `http://localhost:${port}/uploads/${folder}/${filename}`;
+      // ต้องเป็น URL ที่ทั้ง browser และ ai-service (อาจอยู่คนละเครื่อง/container) เข้าถึงได้
+      const baseUrl = process.env.PUBLIC_BASE_URL ?? `http://localhost:${port}`;
+      const url = `${baseUrl}/uploads/${folder}/${filename}`;
       this.logger.warn(`⚠️ Supabase ไม่ได้ตั้งค่า — บันทึกไฟล์ local: ${url}`);
       return url;
     }
@@ -83,8 +85,9 @@ export class StorageService {
       this.logger.log(`✅ Uploaded → ${url}`);
       return url;
     } catch (err: any) {
-      this.logger.error(`❌ Upload failed: ${err.message}. จำลอง URL เป็น mock://${key}`);
-      return `mock://${key}`;
+      // ห้ามกลืน error — ถ้าคืน URL ปลอม ไฟล์ X-ray จะหายเงียบ ๆ ทั้งที่ client ได้ 200
+      this.logger.error(`❌ Upload failed: ${err.message}`);
+      throw err;
     }
   }
 }

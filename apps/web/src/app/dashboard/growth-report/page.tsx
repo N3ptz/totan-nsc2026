@@ -7,6 +7,7 @@ import {
   ReferenceLine, Cell, PolarAngleAxis,
 } from "recharts";
 import { childrenApi, assessmentsApi, type Child, type Assessment } from "@/lib/api";
+import { fmtYearsMonths } from "@/components/patient/utils";
 
 // ── WHO reference (P3 / P50 / P97, age 2–13) ────────────────────────────────
 const WHO: Record<"M" | "F", { age: number; p3: number; p50: number; p97: number }[]> = {
@@ -194,19 +195,19 @@ export default function GrowthReportPage() {
     });
   }, [child, completedWithHeight]);
 
-  const fahTh = useMemo(() => {
-    if (!latest) return [];
-    const thVal  = Number(latest.targetHeightCm ?? (child?.sex === "M" ? 165.5 : 155.0));
-    const fahVal = Number(latest.finalAdultHeightCm ?? 0);
-    if (!fahVal) return [];
-    return [
-      { name: "Target Height",  value: thVal,  fill: "rgb(var(--aurora-3))" },
-      { name: "Predicted FAH",  value: fahVal, fill: "rgb(var(--aurora-1))" },
-    ];
-  }, [latest, child]);
+  // คำนวณ scalar ก่อน แล้วค่อยประกอบ array ให้กราฟ — ไม่อ่านกลับจาก index ตายตัว
+  // (fahTh[0]/fahTh[1]) ซึ่งจะพังเงียบ ๆ ทันทีที่สลับลำดับแท่งเพื่อเหตุผลด้านภาพ
+  const th  = latest ? Number(latest.targetHeightCm ?? (child?.sex === "M" ? 165.5 : 155.0)) : 0;
+  const fah = latest ? Number(latest.finalAdultHeightCm ?? 0) : 0;
 
-  const th       = fahTh[0]?.value ?? 0;
-  const fah      = fahTh[1]?.value ?? 0;
+  const fahTh = useMemo(() => {
+    if (!fah) return [];
+    return [
+      { name: "Target Height",  value: th,  fill: "rgb(var(--aurora-3))" },
+      { name: "Predicted FAH",  value: fah, fill: "rgb(var(--aurora-1))" },
+    ];
+  }, [th, fah]);
+
   const fahRatio = th > 0 && fah > 0 ? Math.round((fah / th) * 100) : 0;
   const diff     = fah - th;
   const risk     = latest?.riskFlag ? (RISK_MAP[latest.riskFlag] ?? RISK_MAP.normal) : RISK_MAP.normal;
@@ -679,7 +680,7 @@ export default function GrowthReportPage() {
                           <div className="flex items-center justify-between">
                             <span className="font-body text-xs text-muted">Bone Age</span>
                             <span className="font-body text-xs font-bold text-ink">
-                              {Math.floor(Math.round(Number(latest.boneAgeMonths)) / 12)}y {Math.round(Number(latest.boneAgeMonths)) % 12}m
+                              {fmtYearsMonths(latest.boneAgeMonths, false)}
                             </span>
                           </div>
                         )}

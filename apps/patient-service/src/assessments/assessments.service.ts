@@ -268,8 +268,12 @@ export class AssessmentsService {
     return this.assessmentRepo.count();
   }
 
-  async findAllForAdmin() {
-    const rows = await this.assessmentRepo.find({ order: { createdAt: 'DESC' } });
+  async findAllForAdmin(limit = 500) {
+    // จำกัดจำนวนแถวเสมอ — ไม่งั้นทุกครั้งที่เปิดหน้าแอดมินจะลากทั้งตารางข้าม 2 service
+    const rows = await this.assessmentRepo.find({
+      order: { createdAt: 'DESC' },
+      take: Math.min(Math.max(limit, 1), 2000),
+    });
     if (rows.length === 0) return [];
     const childIds = [...new Set(rows.map(r => r.childId))];
     const children = await this.childRepo.find({ where: { id: In(childIds) } });

@@ -75,7 +75,7 @@ function HippoScene() {
   // ── GLB clip support (future-proof: works automatically if a rigged GLB is swapped in) ──
   useEffect(() => {
     if (names.length === 0) return;
-    console.log("[HippoMascot] animation clips:", names);
+    if (process.env.NODE_ENV !== "production") console.log("[HippoMascot] animation clips:", names);
     const idle = names.find(n => /idle|breath|rest|stand|float/i.test(n)) ?? names[0];
     if (idle) actions[idle]?.reset().fadeIn(0.5).play();
     return () => { Object.values(actions).forEach(a => a?.stop()); };

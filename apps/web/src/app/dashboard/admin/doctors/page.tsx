@@ -35,9 +35,9 @@ export default function AdminDoctorsPage() {
     if (!localStorage.getItem("token")) { router.replace("/login"); return; }
     (async () => {
       try {
-        const { data: me } = await authApi.me();
+        // list endpoint มี admin guard ฝั่ง server อยู่แล้ว — ยิงขนานกับ me() ได้ ลด 1 RTT
+        const [{ data: me }, { data }] = await Promise.all([authApi.me(), adminApi.listDoctors()]);
         if (me.role !== "admin") { router.replace("/dashboard"); return; }
-        const { data } = await adminApi.listDoctors();
         setRows(data);
       } catch {
         router.replace("/login");

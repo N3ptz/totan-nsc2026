@@ -7,7 +7,7 @@ import { childrenApi, assessmentsApi, type Child, type Assessment } from "@/lib/
 import { ScrollFade } from "@/components/ScrollFade";
 import { useI18n } from "@/lib/i18n";
 import { MascotBot } from "@/components/MascotBot";
-import { calcAge, calcAgeMonths, fmtDate, RISK_LABEL } from "@/components/patient/utils";
+import { calcAge, calcAgeMonths, ageMonthsAt, fmtDate, fmtYearsMonths, targetHeightCm, RISK_LABEL } from "@/components/patient/utils";
 import { GrowthChart } from "@/components/patient/GrowthChart";
 import { FahThChart } from "@/components/patient/FahThChart";
 import { XrayScanLoader } from "@/components/patient/XrayScanLoader";
@@ -125,11 +125,7 @@ export default function PatientDetailPage() {
   const nextFollowup = assessments.find(a => a.nextFollowupDate);
   const isM = child.sex === "M";
 
-  const targetHeight = child.fatherHeightCm && child.motherHeightCm
-    ? isM
-      ? ((Number(child.fatherHeightCm) + Number(child.motherHeightCm) + 13) / 2).toFixed(1)
-      : ((Number(child.fatherHeightCm) + Number(child.motherHeightCm) - 13) / 2).toFixed(1)
-    : null;
+  const targetHeight = targetHeightCm(child.sex, child.fatherHeightCm, child.motherHeightCm)?.toFixed(1) ?? null;
 
   const deleteChild = async () => {
     setDeleting(true);
@@ -241,7 +237,7 @@ export default function PatientDetailPage() {
               icon="🦴" color="accent"
               label={th ? "อายุกระดูกล่าสุด" : "Latest Bone Age"}
               value={latestCompleted?.boneAgeMonths
-                ? `${Math.floor(Math.round(Number(latestCompleted.boneAgeMonths)) / 12)} ${th ? "ปี" : "y"} ${Math.round(Number(latestCompleted.boneAgeMonths)) % 12} ${th ? "เดือน" : "m"}`
+                ? fmtYearsMonths(latestCompleted.boneAgeMonths, th)
                 : "—"}
               sub={latestCompleted?.riskFlag
                 ? (th ? RISK_LABEL[latestCompleted.riskFlag]?.th : RISK_LABEL[latestCompleted.riskFlag]?.en) ?? "—"
@@ -419,7 +415,8 @@ export default function PatientDetailPage() {
         <AssessmentDetailPanel
           assessment={selectedAssessment}
           child={child}
-          chronAgeMonths={ageMonths}
+          // อายุ ณ วันสแกน ไม่ใช่อายุวันนี้ — ไม่งั้นสแกนเก่าจะถูกจำแนกผิด
+          chronAgeMonths={Math.round(ageMonthsAt(child.dateOfBirth, selectedAssessment.createdAt))}
           onClose={() => setSelectedAssessment(null)}
           onUpdated={(a) => {
             setAssessments(prev => prev.map(x => x.id === a.id ? a : x));

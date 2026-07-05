@@ -1,16 +1,15 @@
 """
-External bone-age model — third-party HuggingFace Space demo
+External bone-age model — the team's own model hosted on a HuggingFace Space
 (FadyI22/BoneAssetmentV1), used as an interim real-model source while this
-service's own DeepLabV3->YOLOv11->ConvNeXt pipeline is still unimplemented.
+service's in-process DeepLabV3->YOLOv11->ConvNeXt pipeline is still
+unimplemented.
 
-IMPORTANT CAVEAT: this is an unaffiliated individual's public Gradio demo —
-no model card, no accuracy validation, no license/citation available at
-integration time. It is a genuine improvement over the random-jitter mock
-(a real model runs on the actual image), but it is NOT a clinically
-validated pipeline. Every result produced through here is tagged
-aiProvider="external_demo" (see bone_age.py) specifically so the UI can
-label it as experimental rather than presenting it as equivalent to a
-validated in-house model.
+IMPORTANT CAVEAT: the Space is an experimental build — its accuracy has not
+been clinically validated yet. It is a genuine improvement over the
+random-jitter mock (a real model runs on the actual image), but every result
+produced through here is tagged aiProvider="external_demo" (see bone_age.py)
+specifically so the UI can label it as experimental rather than presenting
+it as equivalent to a validated production model.
 
 Verified live (see apps/ai-service — manual check, 2026-07-04):
   /bone_age            -> {bone_age_months, bone_age_years, readable, sex}
@@ -28,6 +27,7 @@ directly works regardless of where the file is actually stored.
 
 import logging
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from gradio_client import Client, handle_file
 
@@ -63,9 +63,15 @@ def predict_external(image_bytes: bytes, sex: str) -> dict:
     try:
         img = handle_file(tmp_path)
 
-        bone_age = client.predict(image=img, sex=gradio_sex, api_name="/bone_age")
-        ci = client.predict(image=img, sex=gradio_sex, k=1.0, api_name="/confidence_interval")
-        heatmap_path = client.predict(image=img, sex=gradio_sex, api_name="/gradcam")
+        # 3 endpoint อิสระต่อกัน — ยิงขนานแทนเรียงคิว ไม่งั้นจ่าย round-trip
+        # (+ คิวของ Space) เต็ม ๆ 3 เท่าต่อการประเมิน 1 ครั้ง
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            f_age = pool.submit(client.predict, image=img, sex=gradio_sex, api_name="/bone_age")
+            f_ci = pool.submit(client.predict, image=img, sex=gradio_sex, k=1.0, api_name="/confidence_interval")
+            f_gradcam = pool.submit(client.predict, image=img, sex=gradio_sex, api_name="/gradcam")
+            bone_age = f_age.result()
+            ci = f_ci.result()
+            heatmap_path = f_gradcam.result()
 
         with open(heatmap_path, "rb") as f:
             heatmap_bytes = f.read()

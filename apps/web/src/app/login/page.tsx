@@ -459,9 +459,9 @@ export default function LoginPage() {
                 <Field label={tl.roleLabel}>
                   <div className="grid grid-cols-2 gap-2.5 mt-1">
                     {([
+                      // backend รับสมัครเฉพาะ doctor|parent — บัญชี admin สร้างผ่าน seed script เท่านั้น
                       { v: "doctor" as const, label: tl.roleDoctor, sub: tl.roleDoctorSub, icon: "🩺",     span: false },
                       { v: "parent" as const, label: tl.roleParent, sub: tl.roleParentSub, icon: "👨‍👩‍👧", span: false },
-                      { v: "admin"  as const, label: tl.roleAdmin,  sub: tl.roleAdminSub,  icon: "🛡️",     span: true  },
                     ]).map(r => (
                       <button key={r.v} type="button" onClick={() => setRole(r.v)}
                         className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all duration-200 relative overflow-hidden hover:-translate-y-0.5 ${r.span ? "col-span-2 flex-row" : "flex-col"}`}

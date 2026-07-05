@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { childrenApi, assessmentsApi, authApi, type Child, type Assessment } from "@/lib/api";
+import { fmtYearsMonths, targetHeightCm } from "@/components/patient/utils";
 
 // ── Helpers ───────────────────────────────────────────────
 function calcAgeAtDate(dob: string, date: string) {
@@ -268,11 +269,7 @@ export default function PrintReportPage() {
   const today     = new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" });
   const reportId  = assessment.id.slice(-8).toUpperCase();
 
-  const targetHeight = child.fatherHeightCm && child.motherHeightCm
-    ? isM
-      ? ((+child.fatherHeightCm + +child.motherHeightCm + 13) / 2).toFixed(1)
-      : ((+child.fatherHeightCm + +child.motherHeightCm - 13) / 2).toFixed(1)
-    : null;
+  const targetHeight = targetHeightCm(child.sex, child.fatherHeightCm, child.motherHeightCm)?.toFixed(1) ?? null;
 
   const S: React.CSSProperties = { fontFamily: "'Sarabun','Noto Sans Thai',system-ui,sans-serif", fontSize: 12, color: "#1a1a1a", background: "white" };
 
@@ -462,11 +459,11 @@ export default function PrintReportPage() {
           <div style={{ padding: "10px 11px" }}>
             {/* Row 1 */}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 7, marginBottom: 7 }}>
-              <Metric label="อายุกระดูก / Bone Age" value={`${Math.floor(boneAge/12)} ปี ${boneAge%12} เดือน`} sub={`${Math.floor(boneAge/12)}y ${boneAge%12}m`} hi />
+              <Metric label="อายุกระดูก / Bone Age" value={fmtYearsMonths(boneAge, true)} sub={fmtYearsMonths(boneAge, false)} hi />
               <Metric label="อายุปฏิทิน / Chronological Age" value={`${ageAt.years} ปี ${ageAt.months} เดือน`} sub={`${ageAt.years}y ${ageAt.months}m`} />
               <Metric
                 label="ส่วนเบี่ยงเบน / Deviation"
-                value={`${deviation >= 0 ? "+" : ""}${deviation} เดือน`}
+                value={`${deviation >= 0 ? "+" : ""}${Math.round(deviation)} เดือน`}
                 sub={deviation >= 0 ? "มากกว่าอายุปฏิทิน" : "น้อยกว่าอายุปฏิทิน"}
               />
               <Metric label="ความมั่นใจ AI / Confidence" value={assessment.confidence ? `${Math.round(+assessment.confidence*100)}%` : "—"} />

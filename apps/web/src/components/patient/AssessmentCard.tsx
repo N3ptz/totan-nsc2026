@@ -1,7 +1,7 @@
 "use client";
 
 import type { Assessment, Child } from "@/lib/api";
-import { fmtDate, RISK_LABEL } from "./utils";
+import { fmtDate, fmtYearsMonths, RISK_LABEL } from "./utils";
 
 interface AssessmentCardProps {
   assessment: Assessment;
@@ -60,10 +60,10 @@ export function AssessmentCard({
               <span
                 className="inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-accent/10 text-accent"
                 title={th
-                  ? "อายุกระดูกมาจากโมเดล demo ของบุคคลที่สาม ยังไม่ผ่านการตรวจสอบความแม่นยำทางคลินิก"
-                  : "Bone age from a third-party demo model, not clinically validated"}
+                  ? "อายุกระดูกมาจากโมเดล AI ของทีม (เวอร์ชันทดลอง) ยังไม่ผ่านการตรวจสอบความแม่นยำทางคลินิก"
+                  : "Bone age from the team's experimental AI model, not yet clinically validated"}
               >
-                {th ? "AI ทดลอง (Demo ภายนอก)" : "Experimental AI (3rd-party demo)"}
+                {th ? "AI ทดลอง" : "Experimental AI"}
               </span>
             )}
             <span className="font-body text-xs text-muted ml-auto flex-shrink-0">
@@ -115,7 +115,7 @@ export function AssessmentCard({
             {a.weightKg && <MiniStat label={th ? "น้ำหนัก" : "Weight"} value={`${a.weightKg} kg`} />}
             {a.boneAgeMonths && (
               <MiniStat label={th ? "อายุกระดูก" : "Bone Age"}
-                value={`${Math.floor(Math.round(Number(a.boneAgeMonths)) / 12)}y ${Math.round(Number(a.boneAgeMonths)) % 12}m`} />
+                value={fmtYearsMonths(a.boneAgeMonths, th)} />
             )}
             {a.confidence && <MiniStat label={th ? "ความมั่นใจ AI" : "Confidence"} value={`${Math.round(Number(a.confidence) * 100)}%`} />}
             {a.heightPercentile && <MiniStat label="Percentile" value={`P${Math.round(Number(a.heightPercentile))}`} />}

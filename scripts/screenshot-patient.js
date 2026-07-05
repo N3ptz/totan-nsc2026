@@ -1,4 +1,4 @@
-const { chromium } = require('C:\\Users\\Thinkpad\\AppData\\Local\\npm-cache\\_npx\\e41f203b7505f1fb\\node_modules\\playwright');
+const { chromium } = require('playwright');
 const path = require('path');
 
 const TOKEN = process.argv[2];
@@ -11,12 +11,13 @@ const OUT = path.join(__dirname, '..', 'screenshots');
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await ctx.newPage();
 
-  await page.addInitScript((tok) => {
+  const payload = JSON.parse(Buffer.from(TOKEN.split('.')[1], 'base64url').toString());
+  await page.addInitScript(({ tok, user }) => {
     localStorage.setItem('token', tok);
-    localStorage.setItem('user', JSON.stringify({ id: 'a785bcfa-0e9f-4f14-9a49-1c38284aa512', email: 'doctor@totan.dev', role: 'doctor' }));
+    localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('theme', 'dark');
     localStorage.setItem('lang', 'th');
-  }, TOKEN);
+  }, { tok: TOKEN, user: { id: payload.sub, email: payload.email, role: payload.role } });
 
   // patients list
   await page.goto(`${BASE}/dashboard/patients`, { waitUntil: 'networkidle', timeout: 30000 });

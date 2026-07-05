@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { assessmentsApi, type Assessment, type Child } from "@/lib/api";
-import { RISK_LABEL } from "./utils";
+import { fmtYearsMonths, RISK_LABEL } from "./utils";
 import { classifyBoneAge } from "@/lib/boneAgeClassification";
 import { classifyFahVsTargetHeight } from "@/lib/fahTargetHeight";
 
@@ -14,7 +14,9 @@ export function AssessmentDetailPanel({
   const th = lang === "th";
   const boneAge = Number(assessment.boneAgeMonths ?? 0);
   const deviation = boneAge - chronAgeMonths;
-  const isMock = !assessment.heatmapUrl || assessment.heatmapUrl.startsWith("mock://");
+  // ผลจริงที่อัปโหลด heatmap ล้มเหลว (heatmapUrl = null) ต้องไม่ถูกป้ายว่า "จำลอง" —
+  // ความเป็น mock ใช้ assessment.isMock จาก server เท่านั้น
+  const hasHeatmap = !!assessment.heatmapUrl && !assessment.heatmapUrl.startsWith("mock://");
   const growthPattern = boneAge > 0 ? classifyBoneAge(boneAge, chronAgeMonths) : null;
   const fahVsTh = assessment.finalAdultHeightCm && assessment.targetHeightCm
     ? classifyFahVsTargetHeight(Number(assessment.finalAdultHeightCm), Number(assessment.targetHeightCm))
@@ -64,7 +66,7 @@ export function AssessmentDetailPanel({
 
   const rows: { label: string; value: string; highlight?: boolean }[] = [
     { label: th ? "อายุกระดูก" : "Bone Age",
-      value: `${Math.floor(Math.round(boneAge) / 12)} ${th ? "ปี" : "y"} ${Math.round(boneAge) % 12} ${th ? "เดือน" : "m"}`, highlight: true },
+      value: fmtYearsMonths(boneAge, th), highlight: true },
     { label: th ? "ส่วนเบี่ยงเบน" : "Deviation",
       value: `${deviation >= 0 ? "+" : ""}${Math.round(deviation)} ${th ? "เดือน" : "mo"}` },
     { label: th ? "ความมั่นใจ AI" : "AI Confidence",
@@ -118,10 +120,10 @@ export function AssessmentDetailPanel({
             <span
               className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-accent/10 text-accent flex-shrink-0"
               title={th
-                ? "อายุกระดูกมาจากโมเดล demo ของบุคคลที่สาม ยังไม่ผ่านการตรวจสอบความแม่นยำทางคลินิก"
-                : "Bone age from a third-party demo model, not clinically validated"}
+                ? "อายุกระดูกมาจากโมเดล AI ของทีม (เวอร์ชันทดลอง) ยังไม่ผ่านการตรวจสอบความแม่นยำทางคลินิก"
+                : "Bone age from the team's experimental AI model, not yet clinically validated"}
             >
-              {th ? "AI ทดลอง (Demo ภายนอก)" : "Experimental AI (3rd-party demo)"}
+              {th ? "AI ทดลอง" : "Experimental AI"}
             </span>
           )}
           {assessment.riskFlag && RISK_LABEL[assessment.riskFlag] && (
@@ -177,8 +179,10 @@ export function AssessmentDetailPanel({
                   {th ? "Heatmap (Grad-CAM)" : "Heatmap (Grad-CAM)"}
                 </p>
                 <div className="rounded-xl overflow-hidden aspect-square flex items-center justify-center border border-border/30 relative"
-                  style={{ background: isMock ? "linear-gradient(135deg,#0a0a14,#111)" : "black" }}>
-                  {isMock ? (
+                  style={{ background: hasHeatmap ? "black" : "linear-gradient(135deg,#0a0a14,#111)" }}>
+                  {hasHeatmap ? (
+                    <img src={assessment.heatmapUrl} alt="Heatmap" className="w-full h-full object-contain" />
+                  ) : assessment.isMock ? (
                     <>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-24 h-24 rounded-full opacity-70"
@@ -193,7 +197,11 @@ export function AssessmentDetailPanel({
                       </div>
                     </>
                   ) : (
-                    <img src={assessment.heatmapUrl} alt="Heatmap" className="w-full h-full object-contain" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="font-body text-[10px] text-white/40">
+                        {th ? "ไม่มีภาพ Heatmap" : "Heatmap unavailable"}
+                      </span>
+                    </div>
                   )}
                 </div>
               </div>

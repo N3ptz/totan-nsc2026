@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authApi, childrenApi, assessmentsApi, type Child, type Assessment } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { fmtYearsMonths } from "@/components/patient/utils";
 
 const RISK_LABEL: Record<string, { th: string; en: string; cls: string }> = {
   normal:        { th: "ปกติ",           en: "Normal",        cls: "bg-success/10 text-success" },
@@ -112,7 +113,7 @@ export default function ReportsPage() {
                       {new Date(a.createdAt).toLocaleDateString(th ? "th-TH" : "en-US")}
                     </span>
                     <span className="font-body text-sm font-medium text-ink">
-                      {boneAge ? `${Math.floor(boneAge / 12)}${th ? " ปี " : "y "}${Math.round(boneAge % 12)}${th ? " เดือน" : "m"}` : "—"}
+                      {boneAge ? fmtYearsMonths(boneAge, th) : "—"}
                     </span>
                     <span>
                       {risk && (

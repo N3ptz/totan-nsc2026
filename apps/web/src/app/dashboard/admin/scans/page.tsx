@@ -6,6 +6,7 @@ import Link from "next/link";
 import { adminApi, authApi, type AdminScanRow } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
 import { PatientsSkeleton } from "@/components/Skeleton";
+import { fmtYearsMonths } from "@/components/patient/utils";
 import { ScrollFade } from "@/components/ScrollFade";
 import { MascotBot } from "@/components/MascotBot";
 
@@ -31,9 +32,9 @@ export default function AdminScansPage() {
     if (!localStorage.getItem("token")) { router.replace("/login"); return; }
     (async () => {
       try {
-        const { data: me } = await authApi.me();
+        // list endpoint มี admin guard ฝั่ง server อยู่แล้ว — ยิงขนานกับ me() ได้ ลด 1 RTT
+        const [{ data: me }, { data }] = await Promise.all([authApi.me(), adminApi.listScans()]);
         if (me.role !== "admin") { router.replace("/dashboard"); return; }
-        const { data } = await adminApi.listScans();
         setRows(data);
       } catch {
         router.replace("/login");
@@ -149,7 +150,7 @@ export default function AdminScansPage() {
                   {filtered.map((row, i) => {
                     const st = STATUS_STYLE[row.status];
                     const boneAgeText = row.boneAgeMonths != null
-                      ? `${Math.floor(Math.round(row.boneAgeMonths) / 12)}${th ? "ปี" : "y"} ${Math.round(row.boneAgeMonths) % 12}${th ? "ด." : "m"}`
+                      ? fmtYearsMonths(row.boneAgeMonths, th)
                       : "—";
                     return (
                       <div key={row.id}>

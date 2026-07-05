@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { childrenApi, authApi, type Child } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { targetHeightCm } from "@/components/patient/utils";
 
 export default function NewPatientPage() {
   const router = useRouter();
@@ -373,10 +374,7 @@ export default function NewPatientPage() {
                         {th ? "Target Height (Tanner-Whitehouse)" : "Target Height (Tanner-Whitehouse)"}
                       </p>
                       <p className="font-display text-base font-bold text-ink">
-                        {form.sex === "M"
-                          ? ((Number(form.fatherHeightCm) + Number(form.motherHeightCm) + 13) / 2).toFixed(1)
-                          : ((Number(form.fatherHeightCm) + Number(form.motherHeightCm) - 13) / 2).toFixed(1)
-                        } cm
+                        {targetHeightCm(form.sex, form.fatherHeightCm, form.motherHeightCm)?.toFixed(1)} cm
                       </p>
                     </div>
                   </div>

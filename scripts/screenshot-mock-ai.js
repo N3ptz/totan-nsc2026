@@ -1,9 +1,10 @@
-const { chromium } = require('C:\\Users\\Thinkpad\\AppData\\Local\\npm-cache\\_npx\\e41f203b7505f1fb\\node_modules\\playwright');
+const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
-const TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhNzg1YmNmYS0wZTlmLTRmMTQtOWE0OS0xYzM4Mjg0YWE1MTIiLCJlbWFpbCI6ImRvY3RvckB0b3Rhbi5kZXYiLCJyb2xlIjoiZG9jdG9yIiwiaWF0IjoxNzgxODczMTg1LCJleHAiOjE3ODI0Nzc5ODV9.8MhhA2kzqvshkmvVT-GFsrYtPL81-CK4ii2ABv2PWFs';
-const CHILD_ID = '055d1c4a-419c-4807-acff-dba5ff821141';
+const TOKEN = process.env.TOKEN;
+const CHILD_ID = process.env.CHILD_ID;
+if (!TOKEN || !CHILD_ID) { console.error('ต้องตั้ง env TOKEN และ CHILD_ID ก่อนรัน'); process.exit(1); }
 const BASE = 'http://localhost:3100';
 const OUT = path.join(__dirname, '..', 'screenshots');
 
@@ -15,16 +16,13 @@ fs.mkdirSync(OUT, { recursive: true });
   const page = await ctx.newPage();
 
   // Inject auth before any navigation
-  await page.addInitScript((tok) => {
+  const payload = JSON.parse(Buffer.from(TOKEN.split('.')[1], 'base64url').toString());
+  await page.addInitScript(({ tok, user }) => {
     localStorage.setItem('token', tok);
-    localStorage.setItem('user', JSON.stringify({
-      id: 'a785bcfa-0e9f-4f14-9a49-1c38284aa512',
-      email: 'doctor@totan.dev',
-      role: 'doctor'
-    }));
+    localStorage.setItem('user', JSON.stringify(user));
     localStorage.setItem('theme', 'dark');
     localStorage.setItem('lang', 'th');
-  }, TOKEN);
+  }, { tok: TOKEN, user: { id: payload.sub, email: payload.email, role: payload.role } });
 
   console.log('→ Navigating to patient detail page...');
   await page.goto(`${BASE}/dashboard/patients/${CHILD_ID}`, { waitUntil: 'networkidle', timeout: 40000 });

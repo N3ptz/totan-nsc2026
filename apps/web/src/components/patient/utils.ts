@@ -18,6 +18,25 @@ export function ageMonthsAt(dob: string, at: string | Date) {
   return (d.getTime() - b.getTime()) / 86400000 / 30.4368;
 }
 
+// Mid-parental target height (สูตร Tanner): ชาย (พ่อ+แม่+13)/2, หญิง (พ่อ+แม่−13)/2
+// ค่าคงที่ทางคลินิก (13 ซม.) ต้องอยู่ที่เดียว — backend มีสูตรเดียวกันใน bone_age.py (_target_height)
+export function targetHeightCm(
+  sex: string, fatherCm: number | string | null | undefined, motherCm: number | string | null | undefined,
+): number | null {
+  const f = Number(fatherCm), m = Number(motherCm);
+  if (!f || !m) return null;
+  return sex === "M" ? (f + m + 13) / 2 : (f + m - 13) / 2;
+}
+
+// แปลงเดือน (อาจเป็นทศนิยม เช่น 143.6 จากโมเดลจริง) → "11 ปี 11 เดือน" / "11y 11m"
+// ต้อง round ก่อนแยกปี/เดือนเสมอ — ถ้า floor ปีแต่ round เศษเดือนแยกกันจะได้ "11 ปี 12 เดือน"
+export function fmtYearsMonths(months: number | string | null | undefined, th: boolean) {
+  const m = Math.round(Number(months ?? 0));
+  const y = Math.floor(m / 12);
+  const rem = m % 12;
+  return th ? `${y} ปี ${rem} เดือน` : `${y}y ${rem}m`;
+}
+
 export function fmtDate(d: string, locale: string) {
   return new Date(d).toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" });
 }
