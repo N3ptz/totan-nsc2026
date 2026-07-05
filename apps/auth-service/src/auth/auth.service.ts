@@ -1,5 +1,5 @@
 import {
-  Injectable, ConflictException, UnauthorizedException, BadRequestException,
+  Injectable, ConflictException, UnauthorizedException, BadRequestException, Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,6 +18,8 @@ import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(User)   private userRepo: Repository<User>,
     @InjectRepository(Doctor) private doctorRepo: Repository<Doctor>,
@@ -27,6 +29,9 @@ export class AuthService {
   ) {}
 
   private static readonly MAX_OTP_ATTEMPTS = 5;
+  // ต้อง opt-in ชัดเจนเท่านั้น — ถ้าผูกกับ NODE_ENV แล้วลืมตั้งใน production
+  // ระบบยืนยัน email จะถูกข้ามทั้งระบบแบบเงียบ ๆ (fail-open)
+  private static readonly DEV_AUTO_VERIFY = process.env.DEV_AUTO_VERIFY === 'true';
 
   private generateOtp(): string {
     // ใช้ crypto.randomInt — Math.random() เดาได้ ไม่เหมาะกับรหัสยืนยัน
@@ -65,8 +70,21 @@ export class AuthService {
       );
     }
 
-    // ส่ง OTP ทาง email (non-blocking — ไม่ให้ error email ทำให้ register fail)
-    this.emailService.sendVerifyOtp(dto.email, otp).catch(() => {});
+    // Dev: auto-verify immediately so new accounts work without SMTP configured
+    if (AuthService.DEV_AUTO_VERIFY) {
+      await this.userRepo.update(user.id, {
+        status: UserStatus.ACTIVE,
+        verifyOtp: null,
+        verifyOtpExpiresAt: null,
+      });
+      this.logger.warn(`[DEV] Auto-verified ${dto.email} — OTP would have been: ${otp}`);
+      return { message: 'ลงทะเบียนสำเร็จ (dev: auto-verified)', userId: user.id };
+    }
+
+    // Production: send OTP via email (non-blocking — email error must not fail register)
+    this.emailService.sendVerifyOtp(dto.email, otp).catch((err) => {
+      this.logger.error(`Failed to send OTP to ${dto.email}: ${err?.message}`);
+    });
 
     return { message: 'ลงทะเบียนสำเร็จ กรุณายืนยัน email', userId: user.id };
   }

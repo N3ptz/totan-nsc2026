@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { childrenApi, authApi, type Child } from "@/lib/api";
 import { useI18n } from "@/lib/i18n";
+import { targetHeightCm } from "@/components/patient/utils";
 
 export default function NewPatientPage() {
   const router = useRouter();
@@ -116,7 +117,7 @@ export default function NewPatientPage() {
               </button>
               <Link href="/dashboard/patients"
                 className="flex-1 py-2.5 rounded-xl text-sm font-body font-semibold text-white text-center transition-all hover:-translate-y-0.5"
-                style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" }}>
+                style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))" }}>
                 {th ? "ดูรายชื่อ →" : "View List →"}
               </Link>
             </div>
@@ -136,7 +137,7 @@ export default function NewPatientPage() {
         style={{ background: "rgb(var(--aurora-3))" }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 px-8 py-5 glass border-b border-border/50">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-5 glass border-b border-border/50">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/patients"
             className="w-9 h-9 flex items-center justify-center rounded-xl border border-border text-muted hover:text-ink hover:border-border/80 transition-all">
@@ -217,7 +218,7 @@ export default function NewPatientPage() {
                         }`}
                         style={form.sex === s ? {
                           background: s === "M"
-                            ? "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))"
+                            ? "linear-gradient(135deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))"
                             : "linear-gradient(135deg,rgb(var(--accent)),rgb(var(--warning)))"
                         } : undefined}>
                         {s === "M" ? (th ? "♂ ชาย" : "♂ Male") : (th ? "♀ หญิง" : "♀ Female")}
@@ -373,10 +374,7 @@ export default function NewPatientPage() {
                         {th ? "Target Height (Tanner-Whitehouse)" : "Target Height (Tanner-Whitehouse)"}
                       </p>
                       <p className="font-display text-base font-bold text-ink">
-                        {form.sex === "M"
-                          ? ((Number(form.fatherHeightCm) + Number(form.motherHeightCm) + 13) / 2).toFixed(1)
-                          : ((Number(form.fatherHeightCm) + Number(form.motherHeightCm) - 13) / 2).toFixed(1)
-                        } cm
+                        {targetHeightCm(form.sex, form.fatherHeightCm, form.motherHeightCm)?.toFixed(1)} cm
                       </p>
                     </div>
                   </div>
@@ -423,7 +421,7 @@ export default function NewPatientPage() {
           </Link>
           <button type="submit" disabled={saving}
             className="flex items-center gap-2 px-10 py-3 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 disabled:translate-y-0"
-            style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 6px 20px rgb(var(--primary)/0.35)" }}>
+            style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 6px 20px rgb(var(--primary)/0.35)" }}>
             {saving ? (
               <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>{th ? "กำลังบันทึก..." : "Saving..."}</>
             ) : (

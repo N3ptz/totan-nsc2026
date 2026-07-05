@@ -7,6 +7,7 @@ import { authApi } from "@/lib/api";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { AvatarPicker } from "@/components/AvatarPicker";
+import { MascotBot } from "@/components/MascotBot";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [registered, setRegistered] = useState(false);
-  const [role, setRole] = useState<"doctor" | "parent" | "">("");
+  const [role, setRole] = useState<"doctor" | "parent" | "admin" | "">("");
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [regData, setRegData] = useState({ email: "", password: "", fullName: "", phone: "", relationship: "" });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -33,6 +34,7 @@ export default function LoginPage() {
   const [verifyStep, setVerifyStep] = useState<{ email: string; password: string; avatarFile: File | null } | null>(null);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [resendMsg, setResendMsg] = useState("");
+  const otpComplete = otp.every(d => d !== "");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +43,8 @@ export default function LoginPage() {
       const { data } = await authApi.login(loginData.email, loginData.password);
       localStorage.setItem("token", data.accessToken);
       localStorage.setItem("user", JSON.stringify(data.user));
-      router.push("/dashboard");
+      sessionStorage.removeItem("dashTourSeen");
+      router.push(data.user?.role === "admin" ? "/dashboard/admin" : "/dashboard");
     } catch (err: any) {
       setError(err.response?.data?.message ?? "เกิดข้อผิดพลาด");
     } finally { setLoading(false); }
@@ -78,11 +81,12 @@ export default function LoginPage() {
       const { data } = await authApi.login(verifyStep.email, verifyStep.password);
       localStorage.setItem("token", data.accessToken);
       localStorage.setItem("user", JSON.stringify(data.user));
+      sessionStorage.removeItem("dashTourSeen");
       // upload avatar ถ้ามี
       if (verifyStep.avatarFile) {
         await authApi.uploadAvatar(verifyStep.avatarFile).catch(() => {});
       }
-      router.push("/dashboard");
+      router.push(data.user?.role === "admin" ? "/dashboard/admin" : "/dashboard");
     } catch (err: any) {
       setError(err.response?.data?.message ?? "เกิดข้อผิดพลาด");
     } finally { setLoading(false); }
@@ -134,24 +138,28 @@ export default function LoginPage() {
         <div className="absolute inset-0 opacity-[0.06]"
           style={{ backgroundImage: "radial-gradient(circle, #38BDF8 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
 
-        {/* Aurora blobs */}
-        <div className="absolute top-[6%] right-[-6%] w-[520px] h-[520px] rounded-full blur-[110px] opacity-30 animate-blob animate-aurora pointer-events-none"
+        {/* Aurora blobs — kept subtle so the copy reads cleanly */}
+        <div className="absolute top-[6%] right-[-6%] w-[520px] h-[520px] rounded-full blur-[110px] opacity-[0.20] animate-blob animate-aurora pointer-events-none"
           style={{ background: "radial-gradient(circle, #38BDF8, transparent 65%)" }} />
-        <div className="absolute bottom-[2%] left-[-8%] w-[440px] h-[440px] rounded-full blur-[110px] opacity-25 animate-blob animate-aurora-slow pointer-events-none"
+        <div className="absolute bottom-[2%] left-[-8%] w-[440px] h-[440px] rounded-full blur-[110px] opacity-[0.16] animate-blob animate-aurora-slow pointer-events-none"
           style={{ background: "radial-gradient(circle, #A78BFA, transparent 65%)", animationDelay: "-7s" }} />
-        <div className="absolute top-[44%] left-[30%] w-[360px] h-[360px] rounded-full blur-[120px] opacity-20 animate-blob animate-aurora pointer-events-none"
-          style={{ background: "radial-gradient(circle, #EA6C49, transparent 65%)", animationDelay: "-13s" }} />
+        <div className="absolute top-[44%] left-[30%] w-[360px] h-[360px] rounded-full blur-[120px] opacity-[0.12] animate-blob animate-aurora pointer-events-none"
+          style={{ background: "radial-gradient(circle, #0EA5E9, transparent 65%)", animationDelay: "-13s" }} />
 
-        {/* X-ray silhouette */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none animate-float-soft" style={{ opacity: 0.04 }}>
-          <svg viewBox="0 0 400 420" className="w-[460px] h-[460px]" fill="white">
-            <rect x="135" y="220" width="130" height="150" rx="18" />
-            <rect x="139" y="95"  width="28" height="135" rx="14" />
-            <rect x="173" y="65"  width="28" height="165" rx="14" />
-            <rect x="207" y="75"  width="28" height="155" rx="14" />
-            <rect x="239" y="105" width="24" height="125" rx="12" />
-            <rect x="102" y="155" width="23" height="105" rx="11" transform="rotate(-15 113 208)" />
-          </svg>
+        {/* X-ray hand — single layer with scan-line */}
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none animate-float-soft"
+          style={{ opacity: 0.10, animationDuration: "7s" }}>
+          <div className="relative w-[400px]">
+            <img src="/Hand-nobg.png" alt="" aria-hidden
+              className="w-full object-contain select-none"
+              style={{ filter: "brightness(0) invert(1) sepia(1) hue-rotate(170deg) saturate(2.5) brightness(1.2)", transform: "rotate(-5deg)" }} />
+            <div className="absolute inset-x-0 h-8 pointer-events-none"
+              style={{
+                background: "linear-gradient(to bottom, rgba(103,232,249,0.0), rgba(103,232,249,0.18), rgba(103,232,249,0.0))",
+                borderTop: "1px solid rgba(103,232,249,0.45)",
+                animation: "scan-line 4s ease-in-out infinite",
+              }} />
+          </div>
         </div>
 
         {/* Logo */}
@@ -175,11 +183,12 @@ export default function LoginPage() {
             <p className="text-[11px] font-body font-bold tracking-[0.25em] uppercase mb-4" style={{ color: "#7dd3fc" }}>
               AI-Powered · Bone Age Assessment
             </p>
-            <h1 className="font-display text-[3.4rem] font-bold leading-[1.06] text-white">
+            <h1 className="font-display font-bold leading-[1.06] text-white"
+              style={{ fontSize: "clamp(2.4rem, 3.8vw, 3.4rem)" }}>
               {tl.heroTitle}<br />
               <span className="text-gradient" style={{ filter: "brightness(1.3)" }}>{tl.heroAccent}</span>
             </h1>
-            <p className="font-body text-base mt-5 leading-relaxed max-w-sm" style={{ color: "rgba(255,255,255,0.55)" }}>
+            <p className="font-body text-base mt-5 leading-relaxed max-w-sm" style={{ color: "rgba(255,255,255,0.72)" }}>
               {tl.heroDesc}
             </p>
           </div>
@@ -202,13 +211,16 @@ export default function LoginPage() {
           {/* Trust badges */}
           <div className="space-y-3">
             {[
-              { icon: "🔒", text: tl.trust1 },
-              { icon: "🏥", text: tl.trust2 },
-              { icon: "✅", text: tl.trust3 },
+              { icon: <TrustShieldIcon />, text: tl.trust1 },
+              { icon: <TrustMedIcon />,   text: tl.trust2 },
+              { icon: <TrustCheckIcon />, text: tl.trust3 },
             ].map(b => (
               <div key={b.text} className="flex items-center gap-3">
-                <span>{b.icon}</span>
-                <span className="font-body text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>{b.text}</span>
+                <div className="w-7 h-7 rounded-lg grid place-items-center flex-shrink-0"
+                  style={{ background: "rgba(56,189,248,0.10)", border: "1px solid rgba(56,189,248,0.20)" }}>
+                  {b.icon}
+                </div>
+                <span className="font-body text-sm" style={{ color: "rgba(255,255,255,0.72)" }}>{b.text}</span>
               </div>
             ))}
           </div>
@@ -245,7 +257,7 @@ export default function LoginPage() {
             <div className="lg:hidden mb-7 text-center">
               <Link href="/" className="inline-flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-2xl flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" }}>
+                  style={{ background: "linear-gradient(135deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))" }}>
                   <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                   </svg>
@@ -258,11 +270,8 @@ export default function LoginPage() {
             {verifyStep ? (
               <>
                 <div className="mb-6 text-center">
-                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                    style={{ background: "linear-gradient(135deg,rgb(var(--aurora-1)/0.15),rgb(var(--aurora-3)/0.15))", border: "1.5px solid rgb(var(--primary)/0.3)" }}>
-                    <svg className="w-8 h-8" style={{ color: "rgb(var(--primary))" }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                    </svg>
+                  <div className="flex justify-center mb-3">
+                    <MascotBot variant={otpComplete ? "success" : "scanning"} size="md" />
                   </div>
                   <h2 className="font-display text-2xl font-bold text-ink">{tl.verifyTitle}</h2>
                   <p className="font-body text-sm text-muted mt-1.5">
@@ -303,12 +312,15 @@ export default function LoginPage() {
                         value={d}
                         onChange={e => handleOtpInput(i, e.target.value)}
                         onKeyDown={e => handleOtpKeyDown(i, e)}
-                        className="w-12 h-14 text-center text-2xl font-bold font-display rounded-xl border-2 transition-all outline-none"
+                        className={`w-12 h-14 text-center text-2xl font-bold font-display rounded-xl border-2 outline-none ${
+                          otpComplete ? "animate-otp-success" : "transition-all"
+                        }`}
                         style={{
-                          borderColor: d ? "rgb(var(--primary))" : "rgb(var(--border))",
-                          background: d ? "rgb(var(--primary)/0.08)" : "rgb(var(--surface)/0.7)",
-                          color: "rgb(var(--ink))",
-                          boxShadow: d ? "0 0 0 3px rgb(var(--primary)/0.14)" : "none",
+                          borderColor: otpComplete ? "rgb(var(--success))" : d ? "rgb(var(--primary))" : "rgb(var(--border))",
+                          background:  otpComplete ? "rgb(var(--success)/0.10)" : d ? "rgb(var(--primary)/0.08)" : "rgb(var(--surface)/0.7)",
+                          color:       "rgb(var(--ink))",
+                          boxShadow:   otpComplete ? "0 0 0 3px rgb(var(--success)/0.20)" : d ? "0 0 0 3px rgb(var(--primary)/0.14)" : "none",
+                          animationDelay: otpComplete ? `${i * 55}ms` : "0ms",
                         }}
                         autoFocus={i === 0}
                       />
@@ -332,6 +344,17 @@ export default function LoginPage() {
               </>
             ) : (
               <>
+            {/* Mascot greeting */}
+            <div className="flex justify-center mb-4">
+              <MascotBot
+                variant="idle"
+                size="sm"
+                message={tab === "login"
+                  ? (lang === "th" ? "สวัสดีค่ะ!" : "Hello!")
+                  : (lang === "th" ? "ยินดีต้อนรับ!" : "Welcome!")}
+              />
+            </div>
+
             {/* Heading */}
             <div className="mb-6">
               <h2 className="font-display text-[2rem] font-bold text-ink leading-tight">
@@ -384,12 +407,12 @@ export default function LoginPage() {
                 <Field label={tl.email}>
                   <input type="email" required value={loginData.email}
                     onChange={e => setLoginData(d => ({ ...d, email: e.target.value }))}
-                    placeholder="doctor@hospital.com" className="input-field" autoComplete="email" />
+                    placeholder="doctor@hospital.com" className="input-base" autoComplete="email" />
                 </Field>
                 <Field label={tl.password}>
                   <input type="password" required value={loginData.password}
                     onChange={e => setLoginData(d => ({ ...d, password: e.target.value }))}
-                    placeholder="••••••••" className="input-field" autoComplete="current-password" />
+                    placeholder="••••••••" className="input-base" autoComplete="current-password" />
                 </Field>
                 <div className="flex justify-end">
                   <a href="#" className="text-xs font-body text-muted hover:text-primary transition-colors">{tl.forgot}</a>
@@ -420,27 +443,28 @@ export default function LoginPage() {
                 <Field label={tl.fullName}>
                   <input type="text" required value={regData.fullName}
                     onChange={e => setRegData(d => ({ ...d, fullName: e.target.value }))}
-                    placeholder={lang === "th" ? "นพ.สมชาย ใจดี" : "Dr. John Smith"} className="input-field" />
+                    placeholder={lang === "th" ? "นพ.สมชาย ใจดี" : "Dr. John Smith"} className="input-base" />
                 </Field>
                 <Field label={tl.email}>
                   <input type="email" required value={regData.email}
                     onChange={e => setRegData(d => ({ ...d, email: e.target.value }))}
-                    placeholder="doctor@hospital.com" className="input-field" />
+                    placeholder="doctor@hospital.com" className="input-base" />
                 </Field>
                 <Field label={tl.password}>
                   <input type="password" required minLength={8} value={regData.password}
                     onChange={e => setRegData(d => ({ ...d, password: e.target.value }))}
-                    placeholder={tl.passwordMin} className="input-field" />
+                    placeholder={tl.passwordMin} className="input-base" />
                 </Field>
 
                 <Field label={tl.roleLabel}>
                   <div className="grid grid-cols-2 gap-2.5 mt-1">
                     {([
-                      { v: "doctor" as const, label: tl.roleDoctor, sub: tl.roleDoctorSub, icon: "🩺" },
-                      { v: "parent" as const, label: tl.roleParent, sub: tl.roleParentSub, icon: "👨‍👩‍👧" },
+                      // backend รับสมัครเฉพาะ doctor|parent — บัญชี admin สร้างผ่าน seed script เท่านั้น
+                      { v: "doctor" as const, label: tl.roleDoctor, sub: tl.roleDoctorSub, icon: "🩺",     span: false },
+                      { v: "parent" as const, label: tl.roleParent, sub: tl.roleParentSub, icon: "👨‍👩‍👧", span: false },
                     ]).map(r => (
                       <button key={r.v} type="button" onClick={() => setRole(r.v)}
-                        className="flex flex-col items-start gap-1.5 p-3.5 rounded-xl border text-left transition-all duration-200 relative overflow-hidden hover:-translate-y-0.5"
+                        className={`flex items-center gap-3 p-3.5 rounded-xl border text-left transition-all duration-200 relative overflow-hidden hover:-translate-y-0.5 ${r.span ? "col-span-2 flex-row" : "flex-col"}`}
                         style={role === r.v
                           ? { borderColor: "rgb(var(--primary))", background: "rgb(var(--primary) / 0.08)", boxShadow: "0 4px 16px rgb(var(--primary)/0.18)" }
                           : { borderColor: "rgb(var(--border))", background: "rgb(var(--surface)/0.5)" }}>
@@ -452,7 +476,7 @@ export default function LoginPage() {
                             </svg>
                           </span>
                         )}
-                        <span className="text-xl">{r.icon}</span>
+                        <span className={r.span ? "text-2xl" : "text-xl mb-1"}>{r.icon}</span>
                         <div>
                           <div className="text-sm font-body font-semibold text-ink">{r.label}</div>
                           <div className="text-[11px] font-body text-muted">{r.sub}</div>
@@ -466,7 +490,7 @@ export default function LoginPage() {
                   <Field label={tl.phone}>
                     <input type="tel" value={regData.phone}
                       onChange={e => setRegData(d => ({ ...d, phone: e.target.value }))}
-                      placeholder="08x-xxx-xxxx" className="input-field" />
+                      placeholder="08x-xxx-xxxx" className="input-base" />
                   </Field>
                 )}
 
@@ -491,26 +515,6 @@ export default function LoginPage() {
         </div>
       </div>
 
-      <style>{`
-        .input-field {
-          width: 100%;
-          padding: 0.72rem 1rem;
-          border-radius: 0.75rem;
-          border: 1.5px solid rgb(var(--border));
-          background: rgb(var(--surface) / 0.7);
-          color: rgb(var(--ink));
-          font-size: 0.875rem;
-          font-family: var(--font-sarabun), system-ui, sans-serif;
-          transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
-          outline: none;
-        }
-        .input-field::placeholder { color: rgb(var(--muted) / 0.45); }
-        .input-field:focus {
-          border-color: rgb(var(--primary));
-          background: rgb(var(--surface));
-          box-shadow: 0 0 0 3px rgb(var(--primary) / 0.14);
-        }
-      `}</style>
     </div>
   );
 }
@@ -538,7 +542,7 @@ function SubmitBtn({ loading, label, processing }: { loading: boolean; label: st
   return (
     <button type="submit" disabled={loading}
       className="group relative w-full py-3.5 text-sm font-body font-semibold rounded-xl transition-all hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-50 disabled:translate-y-0 flex items-center justify-center gap-2 mt-2 overflow-hidden text-white"
-      style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 8px 24px rgb(var(--primary)/0.35)" }}>
+      style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 8px 24px rgb(var(--primary)/0.40)" }}>
       <span className="shine relative z-10 flex items-center justify-center gap-2">
         {loading && (
           <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
@@ -557,4 +561,13 @@ function MoonIcon() {
 }
 function SunIcon() {
   return <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><circle cx="12" cy="12" r="5" /><path strokeLinecap="round" d="M12 2v2m0 16v2M4.22 4.22l1.42 1.42m12.72 12.72 1.42 1.42M2 12h2m16 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" /></svg>;
+}
+function TrustShieldIcon() {
+  return <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="#7dd3fc" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.955 11.955 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>;
+}
+function TrustMedIcon() {
+  return <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="#7dd3fc" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>;
+}
+function TrustCheckIcon() {
+  return <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="#34d399" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>;
 }

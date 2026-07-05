@@ -2,966 +2,22 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
+import { TransitionLink } from "@/components/TransitionLink";
 import { childrenApi, assessmentsApi, type Child, type Assessment } from "@/lib/api";
 import { ScrollFade } from "@/components/ScrollFade";
 import { useI18n } from "@/lib/i18n";
+import { MascotBot } from "@/components/MascotBot";
+import { calcAge, calcAgeMonths, ageMonthsAt, fmtDate, fmtYearsMonths, targetHeightCm, RISK_LABEL } from "@/components/patient/utils";
+import { GrowthChart } from "@/components/patient/GrowthChart";
+import { FahThChart } from "@/components/patient/FahThChart";
+import { XrayScanLoader } from "@/components/patient/XrayScanLoader";
+import { AssessmentCard } from "@/components/patient/AssessmentCard";
+import { NewAssessmentPanel } from "@/components/patient/NewAssessmentPanel";
+import { ChildSettingsPanel } from "@/components/patient/ChildSettingsPanel";
+import { AssessmentDetailPanel } from "@/components/patient/AssessmentDetailPanel";
+import { InfoRow } from "@/components/ui/InfoRow";
+import { StatCard } from "@/components/ui/StatCard";
 
-// ── Helpers ───────────────────────────────────────────────
-function calcAge(dob: string) {
-  const b = new Date(dob); const n = new Date();
-  let y = n.getFullYear() - b.getFullYear();
-  if (n.getMonth() - b.getMonth() < 0 || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) y--;
-  return y;
-}
-function calcAgeMonths(dob: string) {
-  const b = new Date(dob); const n = new Date();
-  return (n.getFullYear() - b.getFullYear()) * 12 + (n.getMonth() - b.getMonth());
-}
-function fmtDate(d: string, locale: string) {
-  return new Date(d).toLocaleDateString(locale, { year: "numeric", month: "short", day: "numeric" });
-}
-
-// cls ต้องเป็น class เต็มๆ — Tailwind JIT ไม่ generate class ที่ประกอบ string ตอน runtime
-const RISK_LABEL: Record<string, { th: string; en: string; cls: string }> = {
-  normal:        { th: "ปกติ",           en: "Normal",        cls: "bg-success/10 text-success" },
-  short_stature: { th: "เตี้ยกว่าเกณฑ์", en: "Short Stature", cls: "bg-warning/10 text-warning" },
-  tall_stature:  { th: "สูงกว่าเกณฑ์",  en: "Tall Stature",  cls: "bg-primary/10 text-primary" },
-  advanced:      { th: "อายุกระดูกมาก",  en: "Advanced",      cls: "bg-danger/10 text-danger"   },
-  delayed:       { th: "อายุกระดูกน้อย", en: "Delayed",       cls: "bg-warning/10 text-warning" },
-};
-
-// ── Growth Chart (SVG) ────────────────────────────────────
-function GrowthChart({ assessments, lang }: { assessments: Assessment[]; lang: string }) {
-  const th = lang === "th";
-  const completed = assessments
-    .filter(a => a.heightCm && a.status === "completed")
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-    .slice(-5); // เอา 5 ครั้งล่าสุดพอ — กราฟไม่รก
-
-  if (completed.length < 2) return (
-    <div className="flex flex-col items-center justify-center py-10 text-center">
-      <span className="text-3xl mb-2">📈</span>
-      <p className="font-body text-sm text-muted">
-        {th ? "ต้องมีผลการประเมิน 2 ครั้งขึ้นไปจึงจะแสดงกราฟได้" : "Need at least 2 completed assessments to show chart"}
-      </p>
-    </div>
-  );
-
-  const W = 480; const H = 180; const PX = 44; const PY = 20;
-  const iW = W - PX * 2; const iH = H - PY - 22;
-
-  const heights = completed.map(a => Number(a.heightCm));
-  const padding = (Math.max(...heights) - Math.min(...heights)) * 0.2 || 4;
-  const minH = Math.floor(Math.min(...heights) - padding);
-  const maxH = Math.ceil(Math.max(...heights) + padding);
-  const dates = completed.map(a => new Date(a.createdAt).getTime());
-  const minD = Math.min(...dates); const maxD = Math.max(...dates);
-
-  const px = (d: number) => maxD === minD ? PX + iW / 2 : PX + ((d - minD) / (maxD - minD)) * iW;
-  const py = (h: number) => maxH === minH ? PY + iH / 2 : PY + iH - ((h - minH) / (maxH - minH)) * iH;
-
-  const points = completed.map(a => ({ x: px(new Date(a.createdAt).getTime()), y: py(Number(a.heightCm)), h: Number(a.heightCm), d: a.createdAt }));
-  const path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  const last = points[points.length - 1];
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-1.5">
-        <div className="w-6 h-0.5 rounded-full" style={{ background: "rgb(var(--primary))" }} />
-        <div className="w-1.5 h-1.5 rounded-full" style={{ background: "rgb(var(--primary))" }} />
-        <span className="font-body text-xs font-semibold" style={{ color: "rgb(var(--primary))" }}>
-          {th ? "ส่วนสูงจริง (ซม.)" : "Actual Height (cm)"}
-        </span>
-      </div>
-      <div className="relative w-full overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 280 }}>
-          <defs>
-            <linearGradient id="hgrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgb(var(--primary))" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="rgb(var(--primary))" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-
-          {[0, 0.25, 0.5, 0.75, 1].map(f => {
-            const y = PY + f * iH;
-            const val = Math.round(maxH - f * (maxH - minH));
-            return (
-              <g key={f}>
-                <line x1={PX} y1={y} x2={W - PX} y2={y} stroke="rgb(var(--border))" strokeWidth="0.8" strokeDasharray="4 4" />
-                <text x={PX - 5} y={y + 3.5} textAnchor="end" fontSize="9" fill="rgb(var(--muted))">{val}</text>
-              </g>
-            );
-          })}
-
-          <path d={`${path} L ${last.x} ${PY + iH} L ${points[0].x} ${PY + iH} Z`} fill="url(#hgrad)" />
-          <path d={path} fill="none" stroke="rgb(var(--primary))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-
-          {points.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r="4.5" fill="rgb(var(--primary))" stroke="rgb(var(--surface))" strokeWidth="2" />
-          ))}
-          {points.length > 0 && (() => {
-            const mid = points[Math.floor((points.length - 1) / 2)];
-            const next = points[Math.floor((points.length - 1) / 2) + 1] ?? mid;
-            const mx = (mid.x + next.x) / 2;
-            const my = (mid.y + next.y) / 2;
-            return <text x={mx} y={my - 10} textAnchor="middle" fontSize="11" fill="rgb(var(--primary))" fontWeight="700">{mid.h} cm</text>;
-          })()}
-
-          {points.map((p, i) => (
-            <text key={i} x={p.x} y={H - 4} textAnchor="middle" fontSize="9" fill="rgb(var(--muted))">
-              {new Date(p.d).toLocaleDateString(th ? "th-TH" : "en-US", { month: "short", year: "2-digit" })}
-            </text>
-          ))}
-
-          <text x={10} y={PY + iH / 2} textAnchor="middle" fontSize="8" fill="rgb(var(--muted))" transform={`rotate(-90, 10, ${PY + iH / 2})`}>
-            {th ? "ซม." : "cm"}
-          </text>
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-// ── FAH vs TH Chart ───────────────────────────────────────
-function FahThChart({ assessments, lang }: { assessments: Assessment[]; lang: string }) {
-  const th = lang === "th";
-  const data = assessments
-    .filter(a => a.status === "completed" && a.finalAdultHeightCm)
-    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-    .slice(-5); // เอา 5 ครั้งล่าสุดพอ — กราฟไม่รก
-
-  if (data.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-10 text-center">
-      <span className="text-3xl mb-2">📊</span>
-      <p className="font-body text-sm text-muted">
-        {th ? "ยังไม่มีข้อมูล FAH / TH" : "No FAH / TH data yet"}
-      </p>
-    </div>
-  );
-
-  const W = 480; const H = 180; const PX = 44; const PY = 20; const PR = 48;
-  const iW = W - PX - PR; const iH = H - PY - 22;
-
-  const fahVals = data.map(a => Number(a.finalAdultHeightCm));
-  const thVals  = data.filter(a => a.targetHeightCm).map(a => Number(a.targetHeightCm));
-  const allVals = [...fahVals, ...thVals];
-  const padding = (Math.max(...allVals) - Math.min(...allVals)) * 0.2 || 4;
-  const minV = Math.floor(Math.min(...allVals) - padding);
-  const maxV = Math.ceil(Math.max(...allVals) + padding);
-
-  const dates = data.map(a => new Date(a.createdAt).getTime());
-  const minD = Math.min(...dates); const maxD = Math.max(...dates);
-
-  const px = (d: number) => maxD === minD ? PX + iW / 2 : PX + ((d - minD) / (maxD - minD)) * iW;
-  const py = (v: number) => maxV === minV ? PY + iH / 2 : PY + iH - ((v - minV) / (maxV - minV)) * iH;
-
-  const fahPts = data.map(a => ({ x: px(new Date(a.createdAt).getTime()), y: py(Number(a.finalAdultHeightCm)), v: Number(a.finalAdultHeightCm), d: a.createdAt }));
-  const thPts  = data.filter(a => a.targetHeightCm).map(a => ({ x: px(new Date(a.createdAt).getTime()), y: py(Number(a.targetHeightCm)), v: Number(a.targetHeightCm) }));
-  const thConst = thPts.length > 0 ? thPts[0].v : null;
-
-  const fahPath = fahPts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
-  const thPath  = thPts.length > 1 ? thPts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ") : null;
-
-  const lastFah = fahPts[fahPts.length - 1];
-  const lastTh  = thPts[thPts.length - 1];
-
-  return (
-    <div className="space-y-3">
-      {/* Legend chips */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <div className="w-6 h-0.5 rounded-full" style={{ background: "rgb(var(--accent))" }} />
-          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "rgb(var(--accent))" }} />
-          <span className="font-body text-xs font-semibold" style={{ color: "rgb(var(--accent))" }}>
-            FAH — {th ? "ส่วนสูงที่คาดการณ์ (ผู้ใหญ่)" : "Final Adult Height"}
-          </span>
-        </div>
-        {thConst && (
-          <div className="flex items-center gap-1.5">
-            <svg width="24" height="4"><line x1="0" y1="2" x2="24" y2="2" stroke="rgb(var(--warning))" strokeWidth="2" strokeDasharray="4 2"/></svg>
-            <span className="font-body text-xs font-semibold" style={{ color: "rgb(var(--warning))" }}>
-              TH — {th ? "ส่วนสูงเป้าหมาย" : "Target Height"} ({thConst} cm)
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* Chart */}
-      <div className="relative w-full overflow-x-auto">
-        <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 280 }}>
-          <defs>
-            <linearGradient id="fahgrad2" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgb(var(--accent))" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="rgb(var(--accent))" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-
-          {/* Grid */}
-          {[0, 0.25, 0.5, 0.75, 1].map(f => {
-            const y = PY + f * iH;
-            const val = Math.round(maxV - f * (maxV - minV));
-            return (
-              <g key={f}>
-                <line x1={PX} y1={y} x2={PX + iW} y2={y} stroke="rgb(var(--border))" strokeWidth="0.8" strokeDasharray="4 4" />
-                <text x={PX - 5} y={y + 3.5} textAnchor="end" fontSize="9" fill="rgb(var(--muted))">{val}</text>
-              </g>
-            );
-          })}
-
-          {/* FAH fill */}
-          {fahPts.length > 1 && (
-            <path d={`${fahPath} L ${lastFah.x} ${PY + iH} L ${fahPts[0].x} ${PY + iH} Z`} fill="url(#fahgrad2)" />
-          )}
-
-          {/* TH line */}
-          {thPath && <path d={thPath} fill="none" stroke="rgb(var(--warning))" strokeWidth="2.2" strokeDasharray="6 3" strokeLinecap="round" strokeLinejoin="round" />}
-          {thPts.length === 1 && (
-            <line x1={PX} y1={thPts[0].y} x2={PX + iW} y2={thPts[0].y}
-              stroke="rgb(var(--warning))" strokeWidth="2" strokeDasharray="6 3" />
-          )}
-
-          {/* FAH line */}
-          <path d={fahPath} fill="none" stroke="rgb(var(--accent))" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-
-          {/* Mid-line labels */}
-          {fahPts.length > 0 && (() => {
-            const mid = fahPts[Math.floor(fahPts.length / 2)];
-            return <text x={mid.x} y={mid.y + 16} textAnchor="middle" fontSize="10" fontWeight="700" fill="rgb(var(--accent))">FAH</text>;
-          })()}
-          {thPts.length > 1 && (() => {
-            const mid = thPts[Math.floor(thPts.length / 2)];
-            return <text x={mid.x} y={mid.y + 16} textAnchor="middle" fontSize="10" fontWeight="700" fill="rgb(var(--warning))">TH</text>;
-          })()}
-          {thPts.length === 1 && (
-            <text x={thPts[0].x} y={thPts[0].y + 16} textAnchor="middle" fontSize="10" fontWeight="700" fill="rgb(var(--warning))">TH</text>
-          )}
-
-          {/* FAH points */}
-          {fahPts.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r="4.5" fill="rgb(var(--accent))" stroke="rgb(var(--surface))" strokeWidth="2" />
-          ))}
-          {/* FAH mid-line value */}
-          {fahPts.length > 0 && (() => {
-            const mid = fahPts[Math.floor((fahPts.length - 1) / 2)];
-            const next = fahPts[Math.floor((fahPts.length - 1) / 2) + 1] ?? mid;
-            const mx = (mid.x + next.x) / 2;
-            const my = (mid.y + next.y) / 2;
-            return <text x={mx} y={my - 10} textAnchor="middle" fontSize="11" fill="rgb(var(--accent))" fontWeight="700">{mid.v} cm</text>;
-          })()}
-
-          {/* TH points */}
-          {thPts.map((p, i) => (
-            <circle key={i} cx={p.x} cy={p.y} r="4" fill="rgb(var(--warning))" stroke="rgb(var(--surface))" strokeWidth="2" />
-          ))}
-          {/* TH mid-line value */}
-          {thPts.length > 0 && (() => {
-            const mid = thPts[Math.floor((thPts.length - 1) / 2)];
-            const next = thPts[Math.floor((thPts.length - 1) / 2) + 1] ?? mid;
-            const mx = (mid.x + next.x) / 2;
-            const my = (mid.y + next.y) / 2;
-            return <text x={mx} y={my + 18} textAnchor="middle" fontSize="11" fill="rgb(var(--warning))" fontWeight="700">{mid.v} cm</text>;
-          })()}
-          {/* TH horizontal line value (single point) */}
-          {thPts.length === 1 && (() => {
-            const mx = PX + iW / 2;
-            return <text x={mx} y={thPts[0].y + 18} textAnchor="middle" fontSize="11" fill="rgb(var(--warning))" fontWeight="700">{thPts[0].v} cm</text>;
-          })()}
-
-          {/* X-axis labels */}
-          {fahPts.map((p, i) => (
-            <text key={i} x={p.x} y={H - 4} textAnchor="middle" fontSize="9" fill="rgb(var(--muted))">
-              {new Date(p.d).toLocaleDateString(th ? "th-TH" : "en-US", { month: "short", year: "2-digit" })}
-            </text>
-          ))}
-
-          {/* Y-axis label */}
-          <text x={10} y={PY + iH / 2} textAnchor="middle" fontSize="8" fill="rgb(var(--muted))" transform={`rotate(-90, 10, ${PY + iH / 2})`}>
-            {th ? "ซม." : "cm"}
-          </text>
-        </svg>
-      </div>
-    </div>
-  );
-}
-
-// ── New Assessment Panel ──────────────────────────────────
-function NewAssessmentPanel({
-  child, onClose, onSaved, lang,
-}: {
-  child: Child; onClose: () => void; onSaved: (a: Assessment) => void; lang: string;
-}) {
-  const th = lang === "th";
-  const [form, setForm] = useState({ heightCm: "", weightKg: "", clinicalNotes: "" });
-  const [saving, setSaving] = useState(false);
-  const [savingStep, setSavingStep] = useState("");
-  const [error, setError] = useState("");
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [xrayPreview, setXrayPreview] = useState<string | null>(null);
-  const [xrayFile, setXrayFile] = useState<File | null>(null);
-
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    setForm(f => ({ ...f, [k]: e.target.value }));
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setXrayFile(file);
-    setXrayPreview(URL.createObjectURL(file));
-  };
-
-  const handleSubmit = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    if (!xrayFile) { setError(th ? "กรุณาเลือกภาพ X-ray" : "Please select an X-ray image"); return; }
-    setSaving(true); setError("");
-    try {
-      // Step 1: upload ไฟล์ไป Supabase ก่อน → ได้ URL
-      setSavingStep(th ? "กำลังอัปโหลดภาพ..." : "Uploading image...");
-      const { data: uploaded } = await assessmentsApi.uploadXray(xrayFile);
-
-      // Step 2: สร้าง assessment พร้อม URL จริง
-      setSavingStep(th ? "กำลังบันทึก..." : "Saving...");
-      const { data } = await assessmentsApi.create({
-        childId: child.id,
-        xrayImageUrl: uploaded.xrayImageUrl,
-        heightCm: form.heightCm ? Number(form.heightCm) : undefined,
-        weightKg: form.weightKg ? Number(form.weightKg) : undefined,
-        clinicalNotes: form.clinicalNotes || undefined,
-      });
-      onSaved(data);
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? (th ? "เกิดข้อผิดพลาด" : "Something went wrong"));
-    } finally {
-      setSaving(false);
-      setSavingStep("");
-    }
-  };
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-
-      {/* Panel */}
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md glass-strong border-l border-border/60 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/50">
-          <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-ink hover:bg-border/40 transition-all">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
-          </button>
-          <div>
-            <h3 className="font-display text-base font-bold text-ink">{th ? "สร้างการประเมินใหม่" : "New Assessment"}</h3>
-            <p className="font-body text-xs text-muted">{child.name}</p>
-          </div>
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          {error && (
-            <div className="px-4 py-3 rounded-xl text-sm font-body text-danger"
-              style={{ background: "rgb(var(--danger)/0.1)", border: "1px solid rgb(var(--danger)/0.2)" }}>
-              {error}
-            </div>
-          )}
-
-          {/* X-ray upload */}
-          <div>
-            <label className="block font-body text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">
-              {th ? "ภาพ X-ray มือซ้าย" : "Left Hand X-ray"} <span className="text-danger">*</span>
-            </label>
-            <div
-              onClick={() => fileRef.current?.click()}
-              className={`cursor-pointer rounded-2xl border-2 border-dashed transition-all flex flex-col items-center justify-center overflow-hidden ${
-                xrayPreview ? "border-primary/40" : "border-border hover:border-primary/40"
-              }`}
-              style={{ minHeight: 160 }}>
-              {xrayPreview ? (
-                <img src={xrayPreview} alt="X-ray preview" className="w-full h-48 object-contain bg-black/80 rounded-2xl" />
-              ) : (
-                <div className="flex flex-col items-center gap-2 py-10 text-muted">
-                  <svg className="w-10 h-10 opacity-40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-                  </svg>
-                  <span className="font-body text-sm">{th ? "คลิกเพื่อเลือกภาพ" : "Click to select image"}</span>
-                  <span className="font-body text-xs opacity-60">JPEG, PNG, DICOM</span>
-                </div>
-              )}
-            </div>
-            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
-          </div>
-
-          {/* Height + Weight */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-body text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">
-                {th ? "ส่วนสูง (ซม.)" : "Height (cm)"}
-              </label>
-              <input type="number" min="30" max="250" step="0.1" value={form.heightCm} onChange={set("heightCm")}
-                placeholder={child.heightCm ? String(child.heightCm) : "120.0"} className="input-base" />
-            </div>
-            <div>
-              <label className="block font-body text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">
-                {th ? "น้ำหนัก (กก.)" : "Weight (kg)"}
-              </label>
-              <input type="number" min="1" max="200" step="0.1" value={form.weightKg} onChange={set("weightKg")}
-                placeholder={child.weightKg ? String(child.weightKg) : "25.0"} className="input-base" />
-            </div>
-          </div>
-
-          {/* Clinical notes */}
-          <div>
-            <label className="block font-body text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">
-              {th ? "หมายเหตุทางคลินิก" : "Clinical Notes"}
-            </label>
-            <textarea value={form.clinicalNotes} onChange={set("clinicalNotes")} rows={3}
-              placeholder={th ? "ข้อสังเกต, อาการ, ยาที่ใช้..." : "Observations, symptoms, medications..."}
-              className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none font-body" />
-          </div>
-        </form>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-border/50">
-          <button onClick={handleSubmit as any} disabled={saving}
-            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50"
-            style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.3)" }}>
-            {saving ? (
-              <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>{savingStep || (th ? "กำลังบันทึก..." : "Saving...")}</>
-            ) : (
-              <>{th ? "ส่งประเมิน AI →" : "Submit for AI Analysis →"}</>
-            )}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── Child Settings Panel ──────────────────────────────────
-function ChildSettingsPanel({
-  child, onClose, onSaved, lang,
-}: {
-  child: Child; onClose: () => void; onSaved: (c: Child) => void; lang: string;
-}) {
-  const th = lang === "th";
-  const [form, setForm] = useState({
-    name:           child.name,
-    dateOfBirth:    child.dateOfBirth.slice(0, 10),
-    ethnicity:      child.ethnicity ?? "",
-    heightCm:       child.heightCm   ? String(child.heightCm)        : "",
-    weightKg:       child.weightKg   ? String(child.weightKg)        : "",
-    fatherHeightCm: child.fatherHeightCm ? String(child.fatherHeightCm) : "",
-    motherHeightCm: child.motherHeightCm ? String(child.motherHeightCm) : "",
-    clinicalNotes:  child.clinicalNotes ?? "",
-  });
-  const [saving, setSaving] = useState(false);
-  const [error, setError]   = useState("");
-
-  const set = (k: keyof typeof form) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-      setForm(f => ({ ...f, [k]: e.target.value }));
-
-  const handleSave = async () => {
-    if (!form.name.trim()) { setError(th ? "กรุณาระบุชื่อ" : "Name is required"); return; }
-    setSaving(true); setError("");
-    try {
-      const payload: Record<string, any> = {
-        name:        form.name.trim(),
-        dateOfBirth: form.dateOfBirth,
-        ethnicity:   form.ethnicity || undefined,
-        heightCm:    form.heightCm       ? Number(form.heightCm)       : undefined,
-        weightKg:    form.weightKg       ? Number(form.weightKg)       : undefined,
-        fatherHeightCm: form.fatherHeightCm ? Number(form.fatherHeightCm) : undefined,
-        motherHeightCm: form.motherHeightCm ? Number(form.motherHeightCm) : undefined,
-        clinicalNotes: form.clinicalNotes || undefined,
-      };
-      const { data } = await childrenApi.update(child.id, payload);
-      onSaved(data);
-    } catch (err: any) {
-      setError(err.response?.data?.message ?? (th ? "เกิดข้อผิดพลาด" : "Something went wrong"));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-md glass-strong border-l border-border/60 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/50 flex-shrink-0">
-          <button onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-ink hover:bg-border/40 transition-all">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <div>
-            <h3 className="font-display text-base font-bold text-ink">{th ? "ตั้งค่าข้อมูลผู้ป่วย" : "Patient Settings"}</h3>
-            <p className="font-body text-xs text-muted">{child.name}</p>
-          </div>
-        </div>
-
-        {/* Form */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {error && (
-            <div className="px-4 py-3 rounded-xl text-sm font-body text-danger"
-              style={{ background: "rgb(var(--danger)/0.1)", border: "1px solid rgb(var(--danger)/0.2)" }}>
-              {error}
-            </div>
-          )}
-
-          {/* Section: ข้อมูลพื้นฐาน */}
-          <div>
-            <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide mb-3">
-              {th ? "ข้อมูลพื้นฐาน" : "Basic Info"}
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "ชื่อ-นามสกุล" : "Full Name"} <span className="text-danger">*</span>
-                </label>
-                <input type="text" value={form.name} onChange={set("name")} className="input-base" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                    {th ? "วันเกิด" : "Date of Birth"}
-                  </label>
-                  <input type="date" value={form.dateOfBirth} onChange={set("dateOfBirth")} className="input-base" />
-                </div>
-                <div>
-                  <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                    {th ? "เชื้อชาติ" : "Ethnicity"}
-                  </label>
-                  <input type="text" value={form.ethnicity} onChange={set("ethnicity")}
-                    placeholder="Thai" className="input-base" />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section: การวัด */}
-          <div>
-            <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide mb-3">
-              {th ? "การวัดล่าสุด" : "Latest Measurements"}
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "ส่วนสูง (ซม.)" : "Height (cm)"}
-                </label>
-                <input type="number" min="30" max="250" step="0.1"
-                  value={form.heightCm} onChange={set("heightCm")} placeholder="120.0" className="input-base" />
-              </div>
-              <div>
-                <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "น้ำหนัก (กก.)" : "Weight (kg)"}
-                </label>
-                <input type="number" min="1" max="200" step="0.1"
-                  value={form.weightKg} onChange={set("weightKg")} placeholder="25.0" className="input-base" />
-              </div>
-            </div>
-          </div>
-
-          {/* Section: ข้อมูลครอบครัว */}
-          <div>
-            <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide mb-3">
-              {th ? "ข้อมูลครอบครัว" : "Family Data"}
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "ส่วนสูงบิดา (ซม.)" : "Father Height (cm)"}
-                </label>
-                <input type="number" min="100" max="250" step="0.1"
-                  value={form.fatherHeightCm} onChange={set("fatherHeightCm")} placeholder="170.0" className="input-base" />
-              </div>
-              <div>
-                <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "ส่วนสูงมารดา (ซม.)" : "Mother Height (cm)"}
-                </label>
-                <input type="number" min="100" max="250" step="0.1"
-                  value={form.motherHeightCm} onChange={set("motherHeightCm")} placeholder="158.0" className="input-base" />
-              </div>
-            </div>
-          </div>
-
-          {/* Section: หมายเหตุ */}
-          <div>
-            <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide mb-3">
-              {th ? "หมายเหตุทางคลินิก" : "Clinical Notes"}
-            </p>
-            <textarea value={form.clinicalNotes} onChange={set("clinicalNotes")} rows={4}
-              placeholder={th ? "ข้อสังเกต, อาการ, ยาที่ใช้..." : "Observations, symptoms, medications..."}
-              className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none font-body" />
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-border/50 flex gap-2 flex-shrink-0">
-          <button onClick={onClose}
-            className="flex-1 py-2.5 rounded-xl text-sm font-body font-semibold text-muted border border-border hover:bg-border/30 transition-all">
-            {th ? "ยกเลิก" : "Cancel"}
-          </button>
-          <button onClick={handleSave} disabled={saving}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50"
-            style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.3)" }}>
-            {saving
-              ? <><svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>{th ? "กำลังบันทึก..." : "Saving..."}</>
-              : (th ? "บันทึก" : "Save")}
-          </button>
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── Assessment Detail Panel ───────────────────────────────
-function AssessmentDetailPanel({
-  assessment, child, chronAgeMonths, onClose, onUpdated, lang, isDoctor,
-}: {
-  assessment: Assessment; child: Child; chronAgeMonths: number; onClose: () => void; onUpdated?: (a: Assessment) => void; lang: string; isDoctor: boolean;
-}) {
-  const th = lang === "th";
-  const boneAge = Number(assessment.boneAgeMonths ?? 0);
-  const deviation = boneAge - chronAgeMonths;
-  const isMock = !assessment.heatmapUrl || assessment.heatmapUrl.startsWith("mock://");
-
-  // ฟอร์ม "ส่งผลให้ผู้ปกครอง" (เฉพาะแพทย์ + ผลต้องเสร็จ + เด็กต้อง link บัญชีผู้ปกครองแล้ว)
-  const completed = assessment.status === "completed";
-  const [notifiedAt, setNotifiedAt] = useState<string | null>(assessment.parentNotifiedAt ?? null);
-  const [editing, setEditing] = useState(!assessment.parentNotifiedAt); // ยังไม่เคยส่ง → เปิดฟอร์มเลย
-  const [fuDate, setFuDate] = useState(
-    assessment.nextFollowupDate ? String(assessment.nextFollowupDate).slice(0, 10) : "",
-  );
-  const [fuTime, setFuTime] = useState("");
-  const [note, setNote] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sendStatus, setSendStatus] = useState<"idle" | "sent" | "error">("idle");
-
-  const fmtSentAt = (s: string) =>
-    new Date(s).toLocaleString(th ? "th-TH" : "en-US", {
-      year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
-    });
-
-  const sendToParent = async () => {
-    if (!fuDate || !child.parentId) return;
-    setSending(true); setSendStatus("idle");
-    try {
-      const { data } = await assessmentsApi.notifyParent(assessment.id, {
-        followUpDate: fuDate,
-        followUpTime: fuTime || undefined,
-        note: note.trim() || undefined,
-      });
-      setNotifiedAt(data?.parentNotifiedAt ?? new Date().toISOString());
-      setEditing(false);
-      setSendStatus("sent");
-      if (data) onUpdated?.(data); // อัปเดต list + panel ให้ followup/สถานะเด้งเอง ไม่ต้อง refresh
-    } catch {
-      setSendStatus("error");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const rows: { label: string; value: string; highlight?: boolean }[] = [
-    { label: th ? "อายุกระดูก" : "Bone Age",
-      value: `${Math.floor(boneAge / 12)} ${th ? "ปี" : "y"} ${boneAge % 12} ${th ? "เดือน" : "m"}`, highlight: true },
-    { label: th ? "ส่วนเบี่ยงเบน" : "Deviation",
-      value: `${deviation >= 0 ? "+" : ""}${deviation} ${th ? "เดือน" : "mo"}` },
-    { label: th ? "ความมั่นใจ AI" : "AI Confidence",
-      value: assessment.confidence ? `${Math.round(Number(assessment.confidence) * 100)}%` : "—" },
-    { label: th ? "ส่วนสูง" : "Height",
-      value: assessment.heightCm ? `${assessment.heightCm} cm` : "—" },
-    { label: th ? "น้ำหนัก" : "Weight",
-      value: assessment.weightKg ? `${assessment.weightKg} kg` : "—" },
-    { label: "BMI",
-      value: assessment.bmi ? `${assessment.bmi}` : "—" },
-    { label: th ? "เปอร์เซนไทล์ส่วนสูง" : "Height Percentile",
-      value: assessment.heightPercentile ? `P${Math.round(Number(assessment.heightPercentile))}` : "—" },
-    { label: th ? "เปอร์เซนไทล์น้ำหนัก" : "Weight Percentile",
-      value: assessment.weightPercentile ? `P${Math.round(Number(assessment.weightPercentile))}` : "—" },
-    { label: th ? "เปอร์เซนไทล์ BMI" : "BMI Percentile",
-      value: assessment.bmiPercentile ? `P${Math.round(Number(assessment.bmiPercentile))}` : "—" },
-    { label: "Height SD (Z-score)",
-      value: assessment.heightSdScore ? `${Number(assessment.heightSdScore) >= 0 ? "+" : ""}${assessment.heightSdScore}` : "—" },
-    { label: th ? "ส่วนสูงที่คาดการณ์ (FAH)" : "Final Adult Height",
-      value: assessment.finalAdultHeightCm ? `${assessment.finalAdultHeightCm} cm` : "—", highlight: true },
-    { label: th ? "ส่วนสูงเป้าหมาย (TH)" : "Target Height",
-      value: assessment.targetHeightCm ? `${assessment.targetHeightCm} cm` : "—" },
-  ];
-
-  return (
-    <>
-      <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-lg glass-strong border-l border-border/60 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center gap-3 px-6 py-4 border-b border-border/50 flex-shrink-0">
-          <button onClick={onClose}
-            className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-ink hover:bg-border/40 transition-all">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-display text-base font-bold text-ink">
-              {th ? "รายละเอียดการประเมิน" : "Assessment Detail"}
-            </h3>
-            <p className="font-body text-xs text-muted truncate">
-              {new Date(assessment.createdAt).toLocaleDateString(th ? "th-TH" : "en-US", { year: "numeric", month: "long", day: "numeric" })}
-            </p>
-          </div>
-          {assessment.isMock && (
-            <span className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-warning/10 text-warning flex-shrink-0">
-              {th ? "ผลจำลอง" : "Simulated"}
-            </span>
-          )}
-          {assessment.riskFlag && RISK_LABEL[assessment.riskFlag] && (
-            <span className={`text-[11px] font-body font-semibold px-2.5 py-1 rounded-full ${RISK_LABEL[assessment.riskFlag].cls} flex-shrink-0`}>
-              {th ? RISK_LABEL[assessment.riskFlag].th : RISK_LABEL[assessment.riskFlag].en}
-            </span>
-          )}
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Images */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* X-ray */}
-            <div className="space-y-1.5">
-              <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide">
-                {th ? "ภาพ X-ray" : "X-ray Image"}
-              </p>
-              <div className="rounded-xl overflow-hidden bg-black/80 aspect-square flex items-center justify-center border border-border/30">
-                {assessment.xrayImageUrl && !assessment.xrayImageUrl.startsWith("mock://") ? (
-                  <img src={assessment.xrayImageUrl} alt="X-ray" className="w-full h-full object-contain" />
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-muted/40">
-                    <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5z" />
-                    </svg>
-                    <span className="font-body text-[10px]">No image</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Heatmap */}
-            <div className="space-y-1.5">
-              <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide">
-                {th ? "Heatmap (Grad-CAM)" : "Heatmap (Grad-CAM)"}
-              </p>
-              <div className="rounded-xl overflow-hidden aspect-square flex items-center justify-center border border-border/30 relative"
-                style={{ background: isMock ? "linear-gradient(135deg,#0a0a14,#111)" : "black" }}>
-                {isMock ? (
-                  <>
-                    {/* Mock heatmap visualization */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-24 h-24 rounded-full opacity-70"
-                        style={{ background: "radial-gradient(circle, rgb(239,68,68) 0%, rgb(234,179,8) 40%, rgb(34,197,94) 70%, transparent 100%)" }} />
-                    </div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="w-14 h-14 rounded-full opacity-50"
-                        style={{ background: "radial-gradient(circle, rgb(255,255,255) 0%, rgb(239,68,68) 60%, transparent 100%)" }} />
-                    </div>
-                    <div className="absolute bottom-2 left-0 right-0 text-center">
-                      <span className="font-body text-[9px] text-white/40">{th ? "ภาพจำลอง" : "Simulated"}</span>
-                    </div>
-                  </>
-                ) : (
-                  <img src={assessment.heatmapUrl} alt="Heatmap" className="w-full h-full object-contain" />
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Metrics table */}
-          <div className="rounded-xl border border-border/40 overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-border/40"
-              style={{ background: "rgb(var(--surface))" }}>
-              <p className="font-display text-xs font-bold text-ink">
-                {th ? "ข้อมูลเชิงลึก" : "Detailed Metrics"}
-              </p>
-            </div>
-            <div className="divide-y divide-border/30">
-              {rows.map((row) => (
-                <div key={row.label} className="flex items-center justify-between px-4 py-2.5 hover:bg-primary/[0.02]">
-                  <span className="font-body text-xs text-muted">{row.label}</span>
-                  <span className={`font-body text-xs font-semibold tabular-nums ${row.highlight ? "text-primary" : "text-ink"}`}>
-                    {row.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Clinical notes */}
-          {assessment.clinicalNotes && (
-            <div className="rounded-xl border border-border/40 p-4 space-y-1">
-              <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide">
-                {th ? "หมายเหตุทางคลินิก" : "Clinical Notes"}
-              </p>
-              <p className="font-body text-sm text-ink leading-relaxed">{assessment.clinicalNotes}</p>
-            </div>
-          )}
-
-          {/* Follow-up */}
-          {assessment.nextFollowupDate && (
-            <div className="rounded-xl border border-warning/30 p-4 space-y-1"
-              style={{ background: "rgb(var(--warning)/0.05)" }}>
-              <p className="font-body text-[11px] font-semibold text-warning uppercase tracking-wide">
-                {th ? "นัดติดตามผล" : "Follow-up"}
-              </p>
-              <p className="font-body text-sm text-ink">
-                {new Date(String(assessment.nextFollowupDate)).toLocaleDateString(th ? "th-TH" : "en-US", { year: "numeric", month: "long", day: "numeric" })}
-              </p>
-              {assessment.followupNotes && (
-                <p className="font-body text-xs text-muted">{assessment.followupNotes}</p>
-              )}
-            </div>
-          )}
-
-          {/* ส่งผลให้ผู้ปกครอง (เฉพาะแพทย์) */}
-          {isDoctor && (
-            <div className="rounded-xl border border-border/40 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-                </svg>
-                <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide">
-                  {th ? "ส่งผลให้ผู้ปกครอง" : "Notify Parent"}
-                </p>
-              </div>
-
-              {!child.parentId ? (
-                <p className="font-body text-xs text-muted">
-                  {th
-                    ? "เด็กคนนี้ยังไม่ได้ผูกบัญชีผู้ปกครอง — เพิ่มอีเมลผู้ปกครองได้ที่ตั้งค่าข้อมูลผู้ป่วย"
-                    : "No parent account linked yet — add the parent's email in patient settings."}
-                </p>
-              ) : !completed ? (
-                <p className="font-body text-xs text-muted">
-                  {th
-                    ? "ผลการประเมินยังไม่เสร็จ — รอ AI วิเคราะห์ให้เสร็จก่อนจึงจะส่งได้"
-                    : "Assessment not completed yet — wait for the AI result before sending."}
-                </p>
-              ) : notifiedAt && !editing ? (
-                <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4 text-success flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-                    </svg>
-                    <p className="font-body text-xs font-semibold text-success">
-                      {th ? "ส่งผล + คำแนะนำให้ผู้ปกครองแล้ว" : "Result + recommendation sent"}
-                    </p>
-                  </div>
-                  <p className="font-body text-[11px] text-muted">
-                    {th ? "ส่งล่าสุดเมื่อ " : "Last sent "}{fmtSentAt(notifiedAt)}
-                  </p>
-                  <p className="font-body text-[11px] text-muted">
-                    {th ? "ผู้ปกครองได้รับอีเมล และอ่านคำแนะนำได้ในแอป (เมนูคำแนะนำจากแพทย์)" : "Parent was emailed and can read it in their app (Recommendations)."}
-                  </p>
-                  <button
-                    onClick={() => { setEditing(true); setSendStatus("idle"); }}
-                    className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
-                    </svg>
-                    {th ? "แก้ไข / ส่งใหม่" : "Edit / Resend"}
-                  </button>
-                </div>
-              ) : (
-                <>
-                  {notifiedAt && (
-                    <p className="font-body text-[11px] text-warning">
-                      {th ? "กำลังแก้ไขเพื่อส่งใหม่ — ส่งล่าสุดเมื่อ " : "Editing to resend — last sent "}{fmtSentAt(notifiedAt)}
-                    </p>
-                  )}
-                  <p className="font-body text-xs text-muted leading-relaxed">
-                    {th
-                      ? "ระบบจะรวบรวมผลการประเมิน (อายุกระดูก ส่วนสูง การแปลผล) พร้อมวันนัดติดตาม ส่งเป็นอีเมล และบันทึกคำแนะนำให้ผู้ปกครองอ่านในแอป (เมนูคำแนะนำจากแพทย์)"
-                      : "The assessment summary and follow-up date are emailed to the parent, and your recommendation is saved to their app (Recommendations menu)."}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="space-y-1">
-                      <label className="font-body text-[11px] font-semibold text-ink">
-                        {th ? "วันนัดติดตาม *" : "Follow-up date *"}
-                      </label>
-                      <input
-                        type="date"
-                        value={fuDate}
-                        onChange={(e) => { setFuDate(e.target.value); setSendStatus("idle"); }}
-                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 font-body"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="font-body text-[11px] font-semibold text-ink">
-                        {th ? "เวลา (ไม่บังคับ)" : "Time (optional)"}
-                      </label>
-                      <input
-                        type="time"
-                        value={fuTime}
-                        onChange={(e) => { setFuTime(e.target.value); setSendStatus("idle"); }}
-                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 font-body"
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="font-body text-[11px] font-semibold text-ink">
-                      {th ? "คำแนะนำถึงผู้ปกครอง (ไม่บังคับ)" : "Recommendation to parent (optional)"}
-                    </label>
-                    <textarea
-                      value={note}
-                      onChange={(e) => { setNote(e.target.value); setSendStatus("idle"); }}
-                      rows={3}
-                      placeholder={th ? "เช่น โภชนาการ การออกกำลังกาย การนอน หรือสิ่งที่ควรสังเกต..." : "e.g. nutrition, exercise, sleep, things to watch for..."}
-                      className="w-full px-4 py-3 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all placeholder:text-muted/40 focus:border-primary focus:ring-2 focus:ring-primary/15 resize-none font-body"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      {sendStatus === "sent" && (
-                        <span className="font-body text-xs text-success">
-                          {th ? "✓ ส่งให้ผู้ปกครองแล้ว" : "✓ Sent to parent"}
-                        </span>
-                      )}
-                      {sendStatus === "error" && (
-                        <span className="font-body text-xs text-danger">
-                          {th ? "ส่งไม่สำเร็จ ลองใหม่อีกครั้ง" : "Failed to send, please retry"}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {notifiedAt && (
-                        <button
-                          onClick={() => { setEditing(false); setSendStatus("idle"); }}
-                          className="px-3 py-2 rounded-xl text-xs font-body font-semibold text-muted hover:text-ink hover:bg-border/40 transition-colors">
-                          {th ? "ยกเลิก" : "Cancel"}
-                        </button>
-                      )}
-                      <button
-                        onClick={sendToParent}
-                        disabled={sending || !fuDate}
-                        className="px-4 py-2 rounded-xl text-xs font-body font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-40 disabled:translate-y-0"
-                        style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" }}>
-                        {sending
-                          ? (th ? "กำลังส่ง..." : "Sending...")
-                          : notifiedAt
-                            ? (th ? "ส่งใหม่อีกครั้ง" : "Resend")
-                            : (th ? "ส่งผล + วันนัดให้ผู้ปกครอง" : "Send to parent")}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    </>
-  );
-}
-
-// ── Main Page ─────────────────────────────────────────────
 export default function PatientDetailPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
@@ -974,21 +30,24 @@ export default function PatientDetailPage() {
   const [showNew, setShowNew] = useState(false);
   const [isDoctor, setIsDoctor] = useState(false);
   const [simulating, setSimulating] = useState<string | null>(null);
+  const [pollExpired, setPollExpired] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteExiting, setDeleteExiting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
-  // กัน setState หลัง unmount ระหว่าง poll
-  // ⚠️ ต้อง set true ตอน mount ด้วย — ไม่งั้น StrictMode (dev) double-invoke แล้วค้างเป็น false
-  // ทำให้ polling ทั้งหมดเป็นหมัน (frontend ไม่อัปเดตเอง ต้อง refresh)
+  const closeDeleteModal = () => {
+    setDeleteExiting(true);
+    setTimeout(() => { setShowDeleteModal(false); setDeleteExiting(false); }, 230);
+  };
+
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
     return () => { alive.current = false; };
   }, []);
 
-  // AI ตอบ 202 แล้วทำงาน background — poll สถานะจนกว่าจะ completed/failed (สูงสุด ~75 วิ)
   const pollAssessment = (assessmentId: string, onDone?: () => void) => {
     let tries = 0;
     const tick = async () => {
@@ -1029,16 +88,24 @@ export default function PatientDetailPage() {
     })();
   }, [id, router]);
 
-  // Auto-refresh: ระหว่างมี assessment ที่ AI กำลังประมวลผล (pending/processing)
-  // ดึงข้อมูลซ้ำทุก 3 วิ จนกว่าจะ completed/failed — ผู้ใช้ไม่ต้องกด refresh เอง
-  // (ครอบคลุมกรณีเปิดหน้ามาแล้วมีงานค้าง หรือ AI ใช้เวลานานกว่า poll ตอนสร้าง)
   useEffect(() => {
     const hasPending = assessments.some(a => a.status === "pending" || a.status === "processing");
-    if (!hasPending) return;
+    if (!hasPending) { setPollExpired(false); return; }
+    let retries = 0;
+    const MAX_RETRIES = 30; // 30 × 3 s = 90 s timeout
     const timer = setInterval(async () => {
+      retries++;
+      if (retries > MAX_RETRIES) {
+        clearInterval(timer);
+        if (alive.current) setPollExpired(true);
+        return;
+      }
       try {
         const { data } = await assessmentsApi.listByChild(id);
-        if (alive.current) setAssessments(data);
+        if (!alive.current) return;
+        setAssessments(data);
+        const stillPending = data.some(a => a.status === "pending" || a.status === "processing");
+        if (!stillPending) { clearInterval(timer); setPollExpired(false); }
       } catch {}
     }, 3000);
     return () => clearInterval(timer);
@@ -1058,11 +125,7 @@ export default function PatientDetailPage() {
   const nextFollowup = assessments.find(a => a.nextFollowupDate);
   const isM = child.sex === "M";
 
-  const targetHeight = child.fatherHeightCm && child.motherHeightCm
-    ? isM
-      ? ((Number(child.fatherHeightCm) + Number(child.motherHeightCm) + 13) / 2).toFixed(1)
-      : ((Number(child.fatherHeightCm) + Number(child.motherHeightCm) - 13) / 2).toFixed(1)
-    : null;
+  const targetHeight = targetHeightCm(child.sex, child.fatherHeightCm, child.motherHeightCm)?.toFixed(1) ?? null;
 
   const deleteChild = async () => {
     setDeleting(true);
@@ -1078,39 +141,28 @@ export default function PatientDetailPage() {
   const simulate = async (assessmentId: string) => {
     setSimulating(assessmentId);
     try {
-      // mock-ai ตอบกลับทันที (ผลจริงมาทาง callback ทีหลัง) → poll จนกว่า AI จะเสร็จ
       await assessmentsApi.mockAiResult(assessmentId);
       pollAssessment(assessmentId, () => { if (alive.current) setSimulating(null); });
     } catch {
-      // Refresh from server in case DB updated but response failed (e.g. Redis down)
       const { data: refreshed } = await assessmentsApi.listByChild(id).catch(() => ({ data: null }));
       if (refreshed) setAssessments(refreshed);
       setSimulating(null);
     }
   };
 
-  const statusCfg: Record<string, { label: string; cls: string }> = {
-    pending:    { label: th ? "รอดำเนินการ"  : "Pending",    cls: "bg-primary/10 text-primary"  },
-    processing: { label: th ? "กำลังวิเคราะห์": "Processing", cls: "bg-warning/10 text-warning"  },
-    completed:  { label: th ? "เสร็จสิ้น"    : "Completed",  cls: "bg-success/10 text-success"  },
-    failed:     { label: th ? "ผิดพลาด"      : "Failed",     cls: "bg-danger/10  text-danger"   },
-  };
-
   return (
     <div className="min-h-screen bg-bg relative overflow-hidden">
-      {/* Ambient */}
       <div className="fixed top-[-10%] right-[-6%] w-[520px] h-[520px] rounded-full blur-[140px] opacity-[0.11] animate-aurora pointer-events-none"
         style={{ background: isM ? "rgb(var(--aurora-1))" : "rgb(var(--accent))" }} />
 
-      {/* Header */}
-      <header className="sticky top-0 z-30 px-8 py-4 glass border-b border-border/50">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-4 glass border-b border-border/50">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/patients"
+          <TransitionLink back href="/dashboard/patients"
             className="w-9 h-9 flex items-center justify-center rounded-xl border border-border text-muted hover:text-ink hover:border-border/80 transition-all flex-shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
-          </Link>
+          </TransitionLink>
 
           <div className="flex items-center gap-3 flex-1 min-w-0">
             <div className="w-10 h-10 rounded-xl flex items-center justify-center text-sm font-bold text-white flex-shrink-0"
@@ -1118,7 +170,8 @@ export default function PatientDetailPage() {
               {child.name.charAt(0)}
             </div>
             <div className="min-w-0">
-              <h1 className="font-display text-lg font-bold text-ink truncate">{child.name}</h1>
+              <h1 className="font-display text-lg font-bold text-ink truncate"
+                style={{ viewTransitionName: `pt-${child.id}` }}>{child.name}</h1>
               <p className="font-body text-xs text-muted">
                 {age} {th ? "ปี" : "yrs"} · {isM ? (th ? "ชาย" : "Male") : (th ? "หญิง" : "Female")} · {child.ethnicity}
               </p>
@@ -1129,7 +182,7 @@ export default function PatientDetailPage() {
             <div className="flex items-center gap-2 flex-shrink-0">
               <button onClick={() => setShowNew(true)}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 active:scale-[0.98]"
-                style={{ background: "linear-gradient(120deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.35)" }}>
+                style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.35)" }}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
@@ -1157,10 +210,7 @@ export default function PatientDetailPage() {
 
       <div className="relative z-10 p-8 space-y-6 max-w-5xl">
 
-        {/* ── Info + Stats row ── */}
-        <div className="grid grid-cols-3 gap-4">
-
-          {/* Patient card */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="col-span-1 glass rounded-2xl p-5 space-y-3">
             <h2 className="font-display text-xs font-bold text-muted uppercase tracking-wide">
               {th ? "ข้อมูลผู้ป่วย" : "Patient Info"}
@@ -1176,8 +226,7 @@ export default function PatientDetailPage() {
             )}
           </div>
 
-          {/* Stats */}
-          <div className="col-span-2 grid grid-cols-2 gap-4">
+          <div className="col-span-1 lg:col-span-2 grid grid-cols-2 gap-4">
             <StatCard
               icon="🔬" color="primary"
               label={th ? "การประเมินทั้งหมด" : "Total Assessments"}
@@ -1188,7 +237,7 @@ export default function PatientDetailPage() {
               icon="🦴" color="accent"
               label={th ? "อายุกระดูกล่าสุด" : "Latest Bone Age"}
               value={latestCompleted?.boneAgeMonths
-                ? `${Math.floor(Number(latestCompleted.boneAgeMonths) / 12)} ${th ? "ปี" : "y"} ${Number(latestCompleted.boneAgeMonths) % 12} ${th ? "เดือน" : "m"}`
+                ? fmtYearsMonths(latestCompleted.boneAgeMonths, th)
                 : "—"}
               sub={latestCompleted?.riskFlag
                 ? (th ? RISK_LABEL[latestCompleted.riskFlag]?.th : RISK_LABEL[latestCompleted.riskFlag]?.en) ?? "—"
@@ -1211,15 +260,14 @@ export default function PatientDetailPage() {
           </div>
         </div>
 
-        {/* ── Growth Charts ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <section className="glass rounded-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-border/50">
               <h2 className="font-display text-sm font-bold text-ink">{th ? "กราฟพัฒนาการส่วนสูง" : "Height Growth Chart"}</h2>
-              <p className="font-body text-[11px] text-muted mt-0.5">{th ? "ส่วนสูงจริงจากผลการประเมิน" : "Actual height from assessments"}</p>
+              <p className="font-body text-[11px] text-muted mt-0.5">{th ? "ส่วนสูงจริง เทียบกับเกณฑ์อ้างอิง WHO (P3/P50/P97)" : "Actual height vs WHO reference (P3/P50/P97)"}</p>
             </div>
             <div className="p-5">
-              <GrowthChart assessments={assessments} lang={lang} />
+              <GrowthChart assessments={assessments} child={child} lang={lang} />
             </div>
           </section>
 
@@ -1236,7 +284,6 @@ export default function PatientDetailPage() {
           </section>
         </div>
 
-        {/* ── Assessment History ── */}
         <section className="glass rounded-2xl overflow-hidden">
           <div className="px-6 py-4 border-b border-border/50 flex items-center justify-between">
             <div>
@@ -1246,128 +293,65 @@ export default function PatientDetailPage() {
           </div>
 
           {assessments.length === 0 ? (
-            <div className="py-16 text-center">
-              <p className="text-4xl mb-3">🔬</p>
-              <p className="font-body font-semibold text-ink text-sm">{th ? "ยังไม่มีประวัติการประเมิน" : "No assessments yet"}</p>
+            <div className="py-14 text-center flex flex-col items-center gap-3">
+              <MascotBot size="lg" variant="idle"
+                message={th ? "ยังไม่มีการประเมิน" : "No assessments yet"} />
+              <p className="font-display font-bold text-ink text-base">
+                {th ? "ยังไม่มีประวัติการประเมิน" : "No assessments yet"}
+              </p>
+              <p className="font-body text-sm text-muted">
+                {th ? "เริ่มประเมินอายุกระดูกครั้งแรกได้เลย" : "Start the first bone age assessment"}
+              </p>
               {isDoctor && (
                 <button onClick={() => setShowNew(true)}
-                  className="mt-4 text-sm font-body font-semibold text-primary bg-primary/10 hover:bg-primary/20 px-4 py-2 rounded-xl transition-colors">
-                  {th ? "+ สร้างการประเมินแรก" : "+ Create first assessment"}
+                  className="mt-2 inline-flex items-center gap-2 text-sm font-body font-semibold text-white px-5 py-2.5 rounded-xl transition-all hover:-translate-y-0.5"
+                  style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.3)" }}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                  </svg>
+                  {th ? "สร้างการประเมินแรก" : "Create first assessment"}
                 </button>
               )}
             </div>
           ) : (
             <ScrollFade enabled={assessments.length > 5} maxHeight={560}>
-            <div className="divide-y divide-border/40">
-              {assessments.map((a, i) => {
-                const cfg = statusCfg[a.status] ?? statusCfg.pending;
-                const risk = a.riskFlag ? RISK_LABEL[a.riskFlag] : null;
-                return (
-                  <div key={a.id} className="px-6 py-4 hover:bg-primary/[0.03] transition-colors">
-                    <div className="flex items-start gap-4">
-                      {/* Index + status dot */}
-                      <div className="flex flex-col items-center gap-1 flex-shrink-0 pt-0.5">
-                        <span className="font-body text-xs text-muted/50 w-5 text-center">{assessments.length - i}</span>
-                        {i < assessments.length - 1 && <div className="w-px flex-1 bg-border/40 min-h-[24px]" />}
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap mb-2">
-                          <span className={`inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full ${cfg.cls}`}>
-                            {cfg.label}
-                          </span>
-                          {risk && (
-                            <span className={`inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full ${risk.cls}`}>
-                              {th ? risk.th : risk.en}
-                            </span>
-                          )}
-                          {a.isMock && (
-                            <span className="inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-warning/10 text-warning">
-                              {th ? "ผลจำลอง" : "Simulated"}
-                            </span>
-                          )}
-                          {isDoctor && (a.status === "pending" || a.status === "failed") && (
-                            <button
-                              onClick={() => simulate(a.id)}
-                              disabled={simulating === a.id}
-                              className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50">
-                              {simulating === a.id ? (
-                                <><svg className="w-2.5 h-2.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>{th ? "กำลัง..." : "Running..."}</>
-                              ) : (
-                                <><span>🤖</span>{th ? "จำลอง AI" : "Simulate AI"}</>
-                              )}
-                            </button>
-                          )}
-                          <span className="font-body text-xs text-muted ml-auto">
-                            {fmtDate(a.createdAt, th ? "th-TH" : "en-US")}
-                          </span>
-                          {a.status === "completed" && (
-                            <>
-                              <button
-                                onClick={() => setSelectedAssessment(a)}
-                                className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                {th ? "รายละเอียด" : "Details"}
-                              </button>
-                              <button
-                                onClick={() => window.open(`/print/${child.id}/${a.id}`, "_blank", "noopener,noreferrer")}
-                                className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-success/10 text-success hover:bg-success/20 transition-colors">
-                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
-                                </svg>
-                                {th ? "พิมพ์รายงาน" : "Print Report"}
-                              </button>
-                            </>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                          {a.heightCm && <MiniStat label={th ? "ส่วนสูง" : "Height"} value={`${a.heightCm} cm`} />}
-                          {a.weightKg && <MiniStat label={th ? "น้ำหนัก" : "Weight"} value={`${a.weightKg} kg`} />}
-                          {a.boneAgeMonths && (
-                            <MiniStat label={th ? "อายุกระดูก" : "Bone Age"}
-                              value={`${Math.floor(Number(a.boneAgeMonths) / 12)}y ${Number(a.boneAgeMonths) % 12}m`} />
-                          )}
-                          {a.confidence && <MiniStat label={th ? "ความมั่นใจ AI" : "Confidence"} value={`${Math.round(Number(a.confidence) * 100)}%`} />}
-                          {a.heightPercentile && <MiniStat label="Percentile" value={`P${Math.round(Number(a.heightPercentile))}`} />}
-                          {a.finalAdultHeightCm && <MiniStat label={th ? "ส่วนสูงคาดการณ์" : "Pred. Ht."} value={`${a.finalAdultHeightCm} cm`} />}
-                        </div>
-
-                        {a.clinicalNotes && (
-                          <p className="font-body text-xs text-muted mt-2 bg-bg2/60 rounded-lg px-3 py-2">
-                            {a.clinicalNotes}
-                          </p>
-                        )}
-                        {a.nextFollowupDate && (
-                          <p className="font-body text-xs text-warning mt-1.5">
-                            📅 {th ? "นัดติดตาม:" : "Follow-up:"} {fmtDate(String(a.nextFollowupDate), th ? "th-TH" : "en-US")}
-                          </p>
-                        )}
-                        {isDoctor && a.parentNotifiedAt && (
-                          <p className="font-body text-xs text-success mt-1.5">
-                            ✓ {th ? "ส่งให้ผู้ปกครองแล้ว" : "Sent to parent"}
-                          </p>
-                        )}
-                      </div>
+              <div className="divide-y divide-border/40">
+                {assessments.some(a => a.status === "processing" || a.status === "pending") && (
+                  pollExpired ? (
+                    <div className="flex items-center gap-3 px-5 py-4 text-sm font-body text-warning bg-warning/5 border-b border-border/40">
+                      <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                      </svg>
+                      {th ? "AI ใช้เวลานานกว่าที่คาด — ระบบยังประมวลผลอยู่ กรุณารีเฟรชหน้าเพื่อดูผลล่าสุด" : "AI is taking longer than expected — still processing. Refresh the page to check the latest status."}
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  ) : (
+                    <XrayScanLoader th={th} />
+                  )
+                )}
+                {assessments.map((a, i) => (
+                  <AssessmentCard
+                    key={a.id}
+                    assessment={a}
+                    child={child}
+                    index={i}
+                    total={assessments.length}
+                    lang={lang}
+                    isDoctor={isDoctor}
+                    simulating={simulating}
+                    onSimulate={simulate}
+                    onViewDetail={setSelectedAssessment}
+                  />
+                ))}
+              </div>
             </ScrollFade>
           )}
         </section>
       </div>
 
-      {/* Delete confirm modal */}
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
-          onClick={e => e.target === e.currentTarget && setShowDeleteModal(false)}>
-          <div className="glass-strong rounded-2xl p-6 w-full max-w-sm">
+        <div className={`dialog-overlay fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-sm${deleteExiting ? " dialog-overlay--out" : ""}`}
+          onClick={e => e.target === e.currentTarget && closeDeleteModal()}>
+          <div className={`dialog-card glass-strong rounded-2xl p-6 w-full max-w-sm${deleteExiting ? " dialog-card--out" : ""}`}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                 style={{ background: "rgb(var(--danger)/0.12)" }}>
@@ -1379,9 +363,7 @@ export default function PatientDetailPage() {
                 <h3 className="font-display text-base font-bold text-ink">
                   {th ? "ลบข้อมูลผู้ป่วย" : "Delete Patient"}
                 </h3>
-                <p className="font-body text-xs text-muted mt-0.5">
-                  {th ? `"${child.name}"` : `"${child.name}"`}
-                </p>
+                <p className="font-body text-xs text-muted mt-0.5">"{child.name}"</p>
               </div>
             </div>
             <p className="font-body text-sm text-muted mb-5">
@@ -1390,23 +372,20 @@ export default function PatientDetailPage() {
                 : "All data including assessment history will be permanently deleted and cannot be recovered."}
             </p>
             <div className="flex gap-2">
-              <button onClick={() => setShowDeleteModal(false)}
+              <button onClick={closeDeleteModal}
                 className="flex-1 py-2.5 rounded-xl text-sm font-body font-semibold text-muted border border-border hover:bg-border/30 transition-all">
                 {th ? "ยกเลิก" : "Cancel"}
               </button>
               <button onClick={deleteChild} disabled={deleting}
                 className="flex-1 py-2.5 rounded-xl text-sm font-body font-semibold text-white transition-all disabled:opacity-50"
                 style={{ background: "rgb(var(--danger))" }}>
-                {deleting
-                  ? (th ? "กำลังลบ..." : "Deleting...")
-                  : (th ? "ลบถาวร" : "Delete")}
+                {deleting ? (th ? "กำลังลบ..." : "Deleting...") : (th ? "ลบถาวร" : "Delete")}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* New Assessment Panel */}
       {showNew && (
         <NewAssessmentPanel
           child={child}
@@ -1415,12 +394,11 @@ export default function PatientDetailPage() {
           onSaved={(a) => {
             setAssessments(prev => [a, ...prev]);
             setShowNew(false);
-            pollAssessment(a.id); // ตามผล AI จนเสร็จโดยไม่ต้อง refresh เอง
+            pollAssessment(a.id);
           }}
         />
       )}
 
-      {/* Child Settings Panel */}
       {showSettings && (
         <ChildSettingsPanel
           child={child}
@@ -1433,16 +411,16 @@ export default function PatientDetailPage() {
         />
       )}
 
-      {/* Assessment Detail Panel */}
       {selectedAssessment && (
         <AssessmentDetailPanel
           assessment={selectedAssessment}
           child={child}
-          chronAgeMonths={ageMonths}
+          // อายุ ณ วันสแกน ไม่ใช่อายุวันนี้ — ไม่งั้นสแกนเก่าจะถูกจำแนกผิด
+          chronAgeMonths={Math.round(ageMonthsAt(child.dateOfBirth, selectedAssessment.createdAt))}
           onClose={() => setSelectedAssessment(null)}
           onUpdated={(a) => {
-            setAssessments(prev => prev.map(x => x.id === a.id ? a : x)); // อัปเดตภาพรวม/ลิสต์
-            setSelectedAssessment(a);                                      // อัปเดต panel ที่เปิดอยู่
+            setAssessments(prev => prev.map(x => x.id === a.id ? a : x));
+            setSelectedAssessment(a);
           }}
           lang={lang}
           isDoctor={isDoctor}
@@ -1452,35 +430,3 @@ export default function PatientDetailPage() {
   );
 }
 
-// ── Sub-components ────────────────────────────────────────
-function InfoRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <span className="font-body text-[11px] text-muted flex-shrink-0">{label}</span>
-      <span className={`font-body text-xs font-semibold text-right ${highlight ? "text-primary" : "text-ink"}`}>{value}</span>
-    </div>
-  );
-}
-
-function StatCard({ icon, color, label, value, sub }: { icon: string; color: string; label: string; value: string; sub: string }) {
-  const colorMap: Record<string, string> = { primary: "text-primary", accent: "text-accent", success: "text-success", warning: "text-warning" };
-  return (
-    <div className="glass rounded-2xl p-4">
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-xl">{icon}</span>
-        <span className={`font-display text-2xl font-bold tabular-nums ${colorMap[color] ?? "text-primary"}`}>{value}</span>
-      </div>
-      <p className="font-body text-xs font-semibold text-ink leading-tight">{label}</p>
-      {sub && <p className="font-body text-[11px] text-muted mt-0.5">{sub}</p>}
-    </div>
-  );
-}
-
-function MiniStat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-bg2/60 rounded-lg px-3 py-1.5">
-      <p className="font-body text-[10px] text-muted">{label}</p>
-      <p className="font-body text-xs font-semibold text-ink">{value}</p>
-    </div>
-  );
-}

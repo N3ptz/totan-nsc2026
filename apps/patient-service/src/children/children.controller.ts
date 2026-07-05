@@ -22,6 +22,12 @@ export class ChildrenController {
     return this.childrenService.findByParent(userId);
   }
 
+  // GET /children/health — health check (must be before :id to avoid UUID conflict)
+  @Get('health')
+  health() {
+    return { status: 'ok', service: 'patient-service' };
+  }
+
   // GET /children/:id — เฉพาะแพทย์เจ้าของเคส หรือผู้ปกครองของเด็กคนนี้
   @Get(':id')
   async findOne(@Param('id') id: string, @Request() req: any) {

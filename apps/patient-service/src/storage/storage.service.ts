@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { randomUUID } from 'crypto';
+import { writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
 
 @Injectable()
 export class StorageService {
@@ -46,23 +48,46 @@ export class StorageService {
     file: Express.Multer.File,
     folder: 'avatars' | 'xrays' | 'heatmaps' | 'reports',
   ): Promise<string> {
-    if (!this.configured) {
-      throw new Error('Storage ยังไม่ได้ตั้งค่า — กรุณากรอก SUPABASE_*/STORAGE_* ใน .env');
-    }
+    const isMockSetup =
+      !this.configured ||
+      process.env.SUPABASE_PROJECT_REF === 'your-project-ref' ||
+      !process.env.SUPABASE_PROJECT_REF;
+
     const ext = file.originalname.split('.').pop() ?? 'bin';
     const key = `${folder}/${randomUUID()}.${ext}`;
 
-    await this.s3.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      }),
-    );
+    if (isMockSetup) {
+      // Save file locally and serve via static endpoint instead of mock:// URL
+      const uploadsDir = join(process.cwd(), 'uploads', folder);
+      mkdirSync(uploadsDir, { recursive: true });
+      const filename = `${randomUUID()}.${ext}`;
+      const filePath = join(uploadsDir, filename);
+      writeFileSync(filePath, file.buffer);
+      const port = process.env.PORT ?? 3002;
+      // ต้องเป็น URL ที่ทั้ง browser และ ai-service (อาจอยู่คนละเครื่อง/container) เข้าถึงได้
+      const baseUrl = process.env.PUBLIC_BASE_URL ?? `http://localhost:${port}`;
+      const url = `${baseUrl}/uploads/${folder}/${filename}`;
+      this.logger.warn(`⚠️ Supabase ไม่ได้ตั้งค่า — บันทึกไฟล์ local: ${url}`);
+      return url;
+    }
 
-    const url = `${this.publicUrl}/${key}`;
-    this.logger.log(`✅ Uploaded → ${url}`);
-    return url;
+    try {
+      await this.s3.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: key,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        }),
+      );
+
+      const url = `${this.publicUrl}/${key}`;
+      this.logger.log(`✅ Uploaded → ${url}`);
+      return url;
+    } catch (err: any) {
+      // ห้ามกลืน error — ถ้าคืน URL ปลอม ไฟล์ X-ray จะหายเงียบ ๆ ทั้งที่ client ได้ 200
+      this.logger.error(`❌ Upload failed: ${err.message}`);
+      throw err;
+    }
   }
 }

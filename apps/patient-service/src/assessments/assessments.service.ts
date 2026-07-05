@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Assessment, AssessmentStatus } from './assessment.entity';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import { AiResultDto } from './dto/ai-result.dto';
@@ -222,14 +222,14 @@ export class AssessmentsService {
     const boneAge = Number(assessment.boneAgeMonths ?? 0);
     const chrono = child.dateOfBirth ? this._monthsBetween(child.dateOfBirth, assessment.createdAt) : 0;
     const dev = boneAge - chrono;
-    const ym = (m: number) => `${Math.floor(m / 12)} ปี ${m % 12} เดือน`;
+    const ym = (m: number) => { const r = Math.round(m); return `${Math.floor(r / 12)} ปี ${r % 12} เดือน`; };
 
     const summary = {
       boneAgeText: assessment.boneAgeMonths != null ? ym(boneAge) : null,
       chronoAgeText: child.dateOfBirth ? ym(chrono) : null,
       deviationText:
         assessment.boneAgeMonths != null
-          ? `${dev >= 0 ? '+' : ''}${dev} เดือน (${dev >= 0 ? 'มากกว่า' : 'น้อยกว่า'}อายุจริง)`
+          ? `${dev >= 0 ? '+' : ''}${Math.round(dev)} เดือน (${dev >= 0 ? 'มากกว่า' : 'น้อยกว่า'}อายุจริง)`
           : null,
       riskTh: assessment.riskFlag ? RISK_TH[assessment.riskFlag] ?? assessment.riskFlag : null,
       heightText: assessment.heightCm
@@ -261,6 +261,24 @@ export class AssessmentsService {
       .catch((err) => this.logger.warn(`Redis publish failed (non-fatal): ${err.message}`));
 
     return this.findOne(id);
+  }
+
+  // ── Admin (internal only) — สำหรับ auth-service admin dashboard ──
+  async countAll(): Promise<number> {
+    return this.assessmentRepo.count();
+  }
+
+  async findAllForAdmin(limit = 500) {
+    // จำกัดจำนวนแถวเสมอ — ไม่งั้นทุกครั้งที่เปิดหน้าแอดมินจะลากทั้งตารางข้าม 2 service
+    const rows = await this.assessmentRepo.find({
+      order: { createdAt: 'DESC' },
+      take: Math.min(Math.max(limit, 1), 2000),
+    });
+    if (rows.length === 0) return [];
+    const childIds = [...new Set(rows.map(r => r.childId))];
+    const children = await this.childRepo.find({ where: { id: In(childIds) } });
+    const nameById = new Map(children.map(c => [c.id, c.name]));
+    return rows.map(r => ({ ...r, childName: nameById.get(r.childId) ?? null }));
   }
 
   // จำนวนเดือนระหว่างวันเกิด → วันตรวจ

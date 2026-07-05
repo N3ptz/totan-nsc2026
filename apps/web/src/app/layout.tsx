@@ -3,6 +3,8 @@ import { Sora, Sarabun } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/lib/theme";
 import { I18nProvider } from "@/lib/i18n";
+import { TourProvider } from "@/components/GuidedTour";
+import { GlobalFooter } from "@/components/GlobalFooter";
 
 const sora = Sora({
   subsets: ["latin"],
@@ -33,10 +35,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="font-body">
+      <body className="font-body flex flex-col min-h-screen">
         <ThemeProvider>
           <I18nProvider>
-            {children}
+            <TourProvider>
+              <div className="flex-1 flex flex-col">{children}</div>
+              <GlobalFooter />
+            </TourProvider>
           </I18nProvider>
         </ThemeProvider>
       </body>

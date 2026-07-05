@@ -9,6 +9,9 @@ const PUBLIC_PATHS = new Set([
   '/auth/health',
   '/auth/verify-email',
   '/auth/resend-verify',
+  '/children/health',
+  '/ai/health',
+  '/notify/health',
 ]);
 
 @Injectable()

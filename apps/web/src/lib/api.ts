@@ -98,6 +98,14 @@ export const assessmentsApi = {
     apiClient.post<Assessment>(`/assessments/${id}/mock-ai`, {}),
 };
 
+// ── Admin (read-only) ─────────────────────────────────────
+export const adminApi = {
+  stats: () => apiClient.get<AdminStats>('/admin/stats'),
+  listDoctors: () => apiClient.get<AdminUserRow[]>('/admin/doctors'),
+  listParents: () => apiClient.get<AdminUserRow[]>('/admin/parents'),
+  listScans: () => apiClient.get<AdminScanRow[]>('/admin/scans'),
+};
+
 // ── Recommendations ───────────────────────────────────────
 export const recommendationsApi = {
   mine: () => apiClient.get<Recommendation[]>('/recommendations/mine'),
@@ -136,6 +144,7 @@ export interface Assessment {
   confidence?: number;
   heatmapUrl?: string;
   isMock?: boolean; // true = ผลจาก mock pipeline (ยังไม่ใช่ model จริง)
+  aiProvider?: 'mock' | 'external_demo'; // external_demo = model จริงจาก third-party demo, ยังไม่ผ่านการตรวจสอบทางคลินิก
   riskFlag?: 'normal' | 'short_stature' | 'tall_stature' | 'advanced' | 'delayed';
   finalAdultHeightCm?: number;
   targetHeightCm?: number;
@@ -160,6 +169,37 @@ export interface Recommendation {
   followUpDate?: string | null;
   followUpTime?: string | null;
   isRead: boolean;
+  createdAt: string;
+}
+
+export interface AdminStats {
+  totalScans: number | null; // null = patient-service ตอบไม่ได้ (แต่ stats endpoint ยังคืนค่าอื่นได้)
+  totalDoctors: number;
+  totalParents: number;
+}
+
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  status: 'unverified' | 'pending' | 'active' | 'inactive';
+  fullName: string | null;
+  phone: string | null;
+  avatarUrl: string | null;
+  relationship?: 'father' | 'mother' | 'guardian';
+  createdAt: string;
+}
+
+export interface AdminScanRow {
+  id: string;
+  childId: string;
+  childName: string | null;
+  doctorId: string;
+  doctorName: string | null;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  boneAgeMonths?: number;
+  confidence?: number;
+  isMock?: boolean;
+  riskFlag?: string;
   createdAt: string;
 }
 
