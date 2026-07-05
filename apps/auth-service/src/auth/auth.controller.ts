@@ -32,8 +32,13 @@ export class AuthController {
   // GET /auth/me — ต้อง login ก่อน
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getMe(@Request() req: any) {
-    return this.authService.getProfile(req.user.userId);
+  async getMe(@Request() req: any) {
+    const me = await this.authService.getProfile(req.user.userId);
+    // bucket เป็น private — DB เก็บ key ต้องเซ็นเป็น URL ก่อนส่งให้ frontend
+    if (me.profile?.avatarUrl) {
+      me.profile.avatarUrl = await this.storageService.signUrl(me.profile.avatarUrl);
+    }
+    return me;
   }
 
   // PATCH /auth/profile — อัปเดตชื่อ/เบอร์โทร
@@ -56,8 +61,10 @@ export class AuthController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
   async updateAvatar(@Request() req: any, @UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('ไม่พบไฟล์');
-    const avatarUrl = await this.storageService.upload(file, 'avatars');
-    return this.authService.updateAvatar(req.user.userId, avatarUrl);
+    const key = await this.storageService.upload(file, 'avatars'); // DB เก็บ key
+    await this.authService.updateAvatar(req.user.userId, key);
+    // ส่ง signed URL กลับให้ UI แสดงรูปได้ทันที
+    return { avatarUrl: await this.storageService.signUrl(key) };
   }
 
   // DELETE /auth/account

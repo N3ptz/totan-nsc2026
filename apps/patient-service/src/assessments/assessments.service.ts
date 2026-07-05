@@ -6,6 +6,7 @@ import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import { AiResultDto } from './dto/ai-result.dto';
 import { NotifyParentDto } from './dto/notify-parent.dto';
 import { RedisService } from '../redis/redis.service';
+import { StorageService } from '../storage/storage.service';
 import { Child } from '../children/child.entity';
 import { Recommendation } from '../recommendations/recommendation.entity';
 import { RequestUser } from '../common/request-user';
@@ -31,7 +32,21 @@ export class AssessmentsService {
     @InjectRepository(Recommendation)
     private recRepo: Repository<Recommendation>,
     private redisService: RedisService,
+    private storageService: StorageService,
   ) {}
+
+  // bucket เป็น private — DB เก็บ key ของภาพ ต้องเซ็นเป็น URL ชั่วคราวก่อนส่งออกทุกครั้ง
+  private async signAssessment<T extends { xrayImageUrl?: string | null; heatmapUrl?: string | null }>(a: T): Promise<T> {
+    const [xray, heatmap] = await Promise.all([
+      this.storageService.signUrl(a.xrayImageUrl),
+      this.storageService.signUrl(a.heatmapUrl),
+    ]);
+    return { ...a, xrayImageUrl: xray, heatmapUrl: heatmap };
+  }
+
+  private signAssessments<T extends { xrayImageUrl?: string | null; heatmapUrl?: string | null }>(rows: T[]): Promise<T[]> {
+    return Promise.all(rows.map((r) => this.signAssessment(r)));
+  }
 
   // ตรวจว่า user มีสิทธิ์เข้าถึงข้อมูลของเด็กคนนี้ (แพทย์เจ้าของเคส / ผู้ปกครองของเด็ก)
   private async assertChildAccess(childId: string, user: RequestUser): Promise<Child> {
@@ -65,7 +80,7 @@ export class AssessmentsService {
       (err) => this.logger.warn(`AI service call failed (non-fatal): ${err.message}`),
     );
 
-    return assessment;
+    return this.signAssessment(assessment);
   }
 
   private async _callAiService(assessment: Assessment, child: Child): Promise<void> {
@@ -78,7 +93,8 @@ export class AssessmentsService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         assessmentId: assessment.id,
-        xrayImageUrl: assessment.xrayImageUrl,
+        // DB เก็บ key — เซ็นเป็น URL ให้ ai-service ดาวน์โหลดได้ (เรียกทันที 1 ชม.เหลือเฟือ)
+        xrayImageUrl: await this.storageService.signUrl(assessment.xrayImageUrl),
         sex: child.sex ?? 'M',
         dateOfBirth: child.dateOfBirth ?? null,
         heightCm: assessment.heightCm ?? null,
@@ -117,17 +133,18 @@ export class AssessmentsService {
   // ดูผลการประเมินทั้งหมดของเด็กคนนึง — เช็คสิทธิ์ก่อน
   async findByChildAuthorized(childId: string, user: RequestUser) {
     await this.assertChildAccess(childId, user);
-    return this.assessmentRepo.find({
+    const rows = await this.assessmentRepo.find({
       where: { childId },
       order: { createdAt: 'DESC' },
     });
+    return this.signAssessments(rows);
   }
 
   // ดูรายละเอียดผลการประเมิน — เช็คสิทธิ์ผ่านเด็กเจ้าของผล
   async findOneAuthorized(id: string, user: RequestUser) {
     const assessment = await this.findOne(id);
     await this.assertChildAccess(assessment.childId, user);
-    return assessment;
+    return this.signAssessment(assessment);
   }
 
   // ใช้ภายใน service เท่านั้น (ไม่เช็คสิทธิ์)
@@ -146,7 +163,7 @@ export class AssessmentsService {
     const child = await this.childRepo.findOne({ where: { id: assessment.childId } });
     if (!child) throw new NotFoundException('ไม่พบข้อมูลเด็ก');
     await this._callAiService(assessment, child);
-    return assessment;
+    return this.signAssessment(assessment);
   }
 
   // บันทึก follow-up date — เฉพาะแพทย์เจ้าของเคส
@@ -159,7 +176,7 @@ export class AssessmentsService {
       nextFollowupDate: date,
       followupNotes: notes,
     });
-    return this.findOne(id);
+    return this.findOne(id).then((a) => this.signAssessment(a));
   }
 
   // แพทย์กด "ส่งผลให้ผู้ปกครอง" — บันทึกวันนัด + รวบรวมผลประเมิน → publish ให้ notify-service ส่งเมล
@@ -257,7 +274,7 @@ export class AssessmentsService {
       })
       .catch((err) => this.logger.warn(`Redis publish failed (non-fatal): ${err.message}`));
 
-    return this.findOne(id);
+    return this.findOne(id).then((a) => this.signAssessment(a));
   }
 
   // ── Admin (internal only) — สำหรับ auth-service admin dashboard ──
@@ -275,7 +292,7 @@ export class AssessmentsService {
     const childIds = [...new Set(rows.map(r => r.childId))];
     const children = await this.childRepo.find({ where: { id: In(childIds) } });
     const nameById = new Map(children.map(c => [c.id, c.name]));
-    return rows.map(r => ({ ...r, childName: nameById.get(r.childId) ?? null }));
+    return this.signAssessments(rows.map(r => ({ ...r, childName: nameById.get(r.childId) ?? null })));
   }
 
   // จำนวนเดือนระหว่างวันเกิด → วันตรวจ
