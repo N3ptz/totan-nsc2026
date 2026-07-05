@@ -679,7 +679,7 @@ export default function GrowthReportPage() {
                           <div className="flex items-center justify-between">
                             <span className="font-body text-xs text-muted">Bone Age</span>
                             <span className="font-body text-xs font-bold text-ink">
-                              {Math.floor(Number(latest.boneAgeMonths) / 12)}y {Number(latest.boneAgeMonths) % 12}m
+                              {Math.floor(Math.round(Number(latest.boneAgeMonths)) / 12)}y {Math.round(Number(latest.boneAgeMonths)) % 12}m
                             </span>
                           </div>
                         )}

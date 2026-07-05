@@ -149,7 +149,7 @@ export default function AdminScansPage() {
                   {filtered.map((row, i) => {
                     const st = STATUS_STYLE[row.status];
                     const boneAgeText = row.boneAgeMonths != null
-                      ? `${Math.floor(row.boneAgeMonths / 12)}${th ? "ปี" : "y"} ${row.boneAgeMonths % 12}${th ? "ด." : "m"}`
+                      ? `${Math.floor(Math.round(row.boneAgeMonths) / 12)}${th ? "ปี" : "y"} ${Math.round(row.boneAgeMonths) % 12}${th ? "ด." : "m"}`
                       : "—";
                     return (
                       <div key={row.id}>

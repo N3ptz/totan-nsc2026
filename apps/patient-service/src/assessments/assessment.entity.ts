@@ -49,6 +49,11 @@ export class Assessment {
   @Column({ default: false })
   isMock: boolean;
 
+  // mock | external_demo — แหล่งที่มาของ bone age (external_demo = HF Space demo
+  // ของบุคคลที่สาม ยังไม่ผ่านการตรวจสอบความแม่นยำทางคลินิก — UI ต้องแสดงป้ายกำกับ)
+  @Column({ default: 'mock' })
+  aiProvider: string;
+
   @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, transformer: numericTransformer })
   finalAdultHeightCm: number; // FAH จาก Bayley-Pinneau method (bone age + current height)
 

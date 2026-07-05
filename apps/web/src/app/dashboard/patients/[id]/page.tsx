@@ -241,7 +241,7 @@ export default function PatientDetailPage() {
               icon="🦴" color="accent"
               label={th ? "อายุกระดูกล่าสุด" : "Latest Bone Age"}
               value={latestCompleted?.boneAgeMonths
-                ? `${Math.floor(Number(latestCompleted.boneAgeMonths) / 12)} ${th ? "ปี" : "y"} ${Number(latestCompleted.boneAgeMonths) % 12} ${th ? "เดือน" : "m"}`
+                ? `${Math.floor(Math.round(Number(latestCompleted.boneAgeMonths)) / 12)} ${th ? "ปี" : "y"} ${Math.round(Number(latestCompleted.boneAgeMonths)) % 12} ${th ? "เดือน" : "m"}`
                 : "—"}
               sub={latestCompleted?.riskFlag
                 ? (th ? RISK_LABEL[latestCompleted.riskFlag]?.th : RISK_LABEL[latestCompleted.riskFlag]?.en) ?? "—"

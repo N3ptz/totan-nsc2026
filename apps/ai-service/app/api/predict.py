@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import httpx
 from fastapi import APIRouter, BackgroundTasks
@@ -10,14 +11,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
-async def _upload_heatmap(heatmap_bytes: bytes, content_type: str = "image/png") -> str | None:
+def _sniff_image_type(data: bytes) -> tuple[str, str]:
+    """Returns (filename, content_type) from magic bytes — the external demo
+    model's /gradcam endpoint returns WebP, not PNG, so this can't be hardcoded."""
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "heatmap.webp", "image/webp"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "heatmap.png", "image/png"
+    if data[:2] == b"\xff\xd8":
+        return "heatmap.jpg", "image/jpeg"
+    return "heatmap.png", "image/png"  # unknown — best-effort fallback
+
+
+async def _upload_heatmap(heatmap_bytes: bytes) -> str | None:
     """Upload heatmap bytes → patient-service → Supabase → คืน URL"""
     try:
+        filename, content_type = _sniff_image_type(heatmap_bytes)
         upload_url = f"{settings.PATIENT_SERVICE_URL}/assessments/upload-heatmap"
         async with httpx.AsyncClient(timeout=30) as client:
             r = await client.post(
                 upload_url,
-                files={"file": ("heatmap.png", heatmap_bytes, content_type)},
+                files={"file": (filename, heatmap_bytes, content_type)},
                 headers={"x-internal-secret": settings.INTERNAL_SECRET},
             )
             r.raise_for_status()
@@ -57,8 +71,12 @@ async def _process_and_callback(req: PredictRequest) -> None:
         except Exception as dl_exc:
             logger.warning(f"Image download skipped [{req.assessmentId}]: {dl_exc}")
 
-        # 2. Pipeline
-        result: AiResult = pipeline.run(
+        # 2. Pipeline — offloaded to a thread since the external model call
+        #    is a blocking network request that could take seconds; running
+        #    it directly here would stall the whole event loop (all other
+        #    requests, including health checks) for that long.
+        result: AiResult = await asyncio.to_thread(
+            pipeline.run,
             image_bytes=image_bytes,
             sex=req.sex,
             height_cm=req.heightCm,

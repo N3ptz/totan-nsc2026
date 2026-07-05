@@ -51,4 +51,9 @@ export class AiResultDto {
   @IsOptional()
   @IsBoolean()
   isMock?: boolean;
+
+  // mock | external_demo — บอกแหล่งที่มาของ bone age ให้ UI แสดงป้ายกำกับถูกต้อง
+  @IsOptional()
+  @IsIn(['mock', 'external_demo'])
+  aiProvider?: string;
 }

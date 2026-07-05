@@ -144,6 +144,7 @@ export interface Assessment {
   confidence?: number;
   heatmapUrl?: string;
   isMock?: boolean; // true = ผลจาก mock pipeline (ยังไม่ใช่ model จริง)
+  aiProvider?: 'mock' | 'external_demo'; // external_demo = model จริงจาก third-party demo, ยังไม่ผ่านการตรวจสอบทางคลินิก
   riskFlag?: 'normal' | 'short_stature' | 'tall_stature' | 'advanced' | 'delayed';
   finalAdultHeightCm?: number;
   targetHeightCm?: number;

@@ -11,6 +11,7 @@ from .growth_standards import (
     bmi_zscore_percentile,
 )
 from .bayley_pinneau import predict_adult_height_cm
+from .external_bone_age import predict_external
 
 logger = logging.getLogger(__name__)
 
@@ -67,9 +68,9 @@ class BoneAgePipeline:
         date_of_birth: str | None = None,
     ) -> AiResult:
         """
-        TODO: แทนที่ _mock_run() ด้วย pipeline จริง
+        TODO: แทนที่ด้วย in-house pipeline จริงเมื่อ train เสร็จ
 
-        Steps:
+        Steps (ปัจจุบันยืมจาก external HF Space demo — ดู _get_bone_age):
         1. DeepLabV3  — segment มือออกจากพื้นหลัง
         2. YOLOv11    — detect ROI: Carpals, Phalanges, RadiusUlna
         3. ConvNeXt   — predict bone age per ROI → weighted average → boneAgeMonths
@@ -80,15 +81,54 @@ class BoneAgePipeline:
                       — heightPercentile, heightSdScore, bmi, bmiPercentile, riskFlag
         """
         if not self._loaded:
-            return self._mock_run(sex, height_cm, weight_kg, father_height_cm, mother_height_cm, date_of_birth)
+            return self._external_or_mock_run(
+                image_bytes, sex, height_cm, weight_kg, father_height_cm, mother_height_cm, date_of_birth
+            )
 
-        # TODO: real pipeline goes here
-        raise NotImplementedError("Real pipeline not implemented yet")
+        # TODO: real in-house pipeline goes here
+        raise NotImplementedError("In-house pipeline not implemented yet")
 
-    # ─── Mock (ใช้เมื่อ weights ยังไม่ load) ─────────────────────────────────
+    # ─── External demo model, with mock fallback (ใช้เมื่อ weights ยังไม่ load) ──
 
-    def _mock_run(
+    def _get_bone_age(
+        self, image_bytes: bytes, sex: str, chron_age_months: int,
+    ) -> tuple[float, float, bytes | None, bool, str]:
+        """
+        Returns (bone_age_months, confidence, heatmap_bytes, is_mock, ai_provider).
+
+        Tries the external HF Space demo first (see external_bone_age.py for
+        the "experimental, unvalidated" caveat); falls back to the random-jitter
+        mock on any failure (network, cold-start timeout, bad response) so a
+        flaky third-party call never leaves an assessment stuck processing.
+        """
+        if image_bytes:
+            try:
+                ext = predict_external(image_bytes, sex)
+                confidence = self._confidence_from_sd(ext["sd_months"])
+                return ext["bone_age_months"], confidence, ext["heatmap_bytes"], False, "external_demo"
+            except Exception as exc:
+                logger.warning(f"External bone-age model failed, falling back to mock: {exc}")
+
+        deviation = round((random.random() - 0.5) * 16)
+        bone_age_months = max(6, chron_age_months + deviation)
+        confidence = round((0.82 + random.random() * 0.14) * 1000) / 1000
+        return float(bone_age_months), confidence, None, True, "mock"
+
+    @staticmethod
+    def _confidence_from_sd(sd_months: float) -> float:
+        """
+        Maps the external model's own reported uncertainty (SD in months) to
+        a 0-1 confidence score for display, anchored to the same +/-24mo
+        (~2 SD) threshold _classify_deviation already uses as "clinically
+        significant discrepancy" — an SD at that scale maps to ~0 confidence,
+        an SD near 0 maps to ~1. This is a display heuristic, not a validated
+        statistical confidence interval; sd_months itself is the honest number.
+        """
+        return round(max(0.05, min(0.99, 1 - sd_months / 24)), 3)
+
+    def _external_or_mock_run(
         self,
+        image_bytes: bytes,
         sex: str,
         height_cm: float | None,
         weight_kg: float | None,
@@ -98,9 +138,10 @@ class BoneAgePipeline:
     ) -> AiResult:
         chron_age_months = self._chron_age_months(date_of_birth)
 
-        deviation = round((random.random() - 0.5) * 16)
-        bone_age_months = max(6, chron_age_months + deviation)
-        confidence = round((0.82 + random.random() * 0.14) * 1000) / 1000
+        bone_age_months, confidence, heatmap_bytes, is_mock, ai_provider = self._get_bone_age(
+            image_bytes, sex, chron_age_months
+        )
+        deviation = round(bone_age_months - chron_age_months)
 
         risk_flag = self._classify_deviation(deviation)
 
@@ -122,6 +163,7 @@ class BoneAgePipeline:
             boneAgeMonths=float(bone_age_months),
             confidence=confidence,
             heatmapUrl=None,
+            heatmapBytes=heatmap_bytes,
             finalAdultHeightCm=final_adult_height_cm,
             targetHeightCm=target_height_cm,
             heightPercentile=height_percentile,
@@ -130,7 +172,8 @@ class BoneAgePipeline:
             bmiPercentile=bmi_percentile,
             heightSdScore=height_sd_score,
             riskFlag=risk_flag,
-            isMock=True,  # ผลจำลอง — UI/รายงานต้องแสดงให้ชัดว่าไม่ใช่ผล AI จริง
+            isMock=is_mock,        # True = ผลจำลอง (random jitter) — ทั้ง external call ล้มเหลวหรือไม่ก็ตาม
+            aiProvider=ai_provider,  # mock | external_demo — UI ใช้บอกว่าผลนี้มาจากไหน
         )
 
     @staticmethod

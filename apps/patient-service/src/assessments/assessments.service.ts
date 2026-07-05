@@ -222,14 +222,14 @@ export class AssessmentsService {
     const boneAge = Number(assessment.boneAgeMonths ?? 0);
     const chrono = child.dateOfBirth ? this._monthsBetween(child.dateOfBirth, assessment.createdAt) : 0;
     const dev = boneAge - chrono;
-    const ym = (m: number) => `${Math.floor(m / 12)} ปี ${m % 12} เดือน`;
+    const ym = (m: number) => { const r = Math.round(m); return `${Math.floor(r / 12)} ปี ${r % 12} เดือน`; };
 
     const summary = {
       boneAgeText: assessment.boneAgeMonths != null ? ym(boneAge) : null,
       chronoAgeText: child.dateOfBirth ? ym(chrono) : null,
       deviationText:
         assessment.boneAgeMonths != null
-          ? `${dev >= 0 ? '+' : ''}${dev} เดือน (${dev >= 0 ? 'มากกว่า' : 'น้อยกว่า'}อายุจริง)`
+          ? `${dev >= 0 ? '+' : ''}${Math.round(dev)} เดือน (${dev >= 0 ? 'มากกว่า' : 'น้อยกว่า'}อายุจริง)`
           : null,
       riskTh: assessment.riskFlag ? RISK_TH[assessment.riskFlag] ?? assessment.riskFlag : null,
       heightText: assessment.heightCm

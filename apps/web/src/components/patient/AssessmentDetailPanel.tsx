@@ -64,9 +64,9 @@ export function AssessmentDetailPanel({
 
   const rows: { label: string; value: string; highlight?: boolean }[] = [
     { label: th ? "อายุกระดูก" : "Bone Age",
-      value: `${Math.floor(boneAge / 12)} ${th ? "ปี" : "y"} ${boneAge % 12} ${th ? "เดือน" : "m"}`, highlight: true },
+      value: `${Math.floor(Math.round(boneAge) / 12)} ${th ? "ปี" : "y"} ${Math.round(boneAge) % 12} ${th ? "เดือน" : "m"}`, highlight: true },
     { label: th ? "ส่วนเบี่ยงเบน" : "Deviation",
-      value: `${deviation >= 0 ? "+" : ""}${deviation} ${th ? "เดือน" : "mo"}` },
+      value: `${deviation >= 0 ? "+" : ""}${Math.round(deviation)} ${th ? "เดือน" : "mo"}` },
     { label: th ? "ความมั่นใจ AI" : "AI Confidence",
       value: assessment.confidence ? `${Math.round(Number(assessment.confidence) * 100)}%` : "—" },
     { label: th ? "ส่วนสูง" : "Height",
@@ -112,6 +112,16 @@ export function AssessmentDetailPanel({
           {assessment.isMock && (
             <span className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-warning/10 text-warning flex-shrink-0">
               {th ? "ผลจำลอง" : "Simulated"}
+            </span>
+          )}
+          {!assessment.isMock && assessment.aiProvider === "external_demo" && (
+            <span
+              className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-accent/10 text-accent flex-shrink-0"
+              title={th
+                ? "อายุกระดูกมาจากโมเดล demo ของบุคคลที่สาม ยังไม่ผ่านการตรวจสอบความแม่นยำทางคลินิก"
+                : "Bone age from a third-party demo model, not clinically validated"}
+            >
+              {th ? "AI ทดลอง (Demo ภายนอก)" : "Experimental AI (3rd-party demo)"}
             </span>
           )}
           {assessment.riskFlag && RISK_LABEL[assessment.riskFlag] && (
