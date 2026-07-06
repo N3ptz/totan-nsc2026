@@ -15,6 +15,13 @@ const nextConfig = {
           "https://drive.google.com/drive/folders/1IENuOOBLpJfjr5LHC44zZhhLxcqjZkCp",
         permanent: false,
       },
+      {
+        // แบบสอบถามประเมิน UX/UI (Google Forms)
+        source: "/form",
+        destination:
+          "https://docs.google.com/forms/d/e/1FAIpQLSeFyUmsCmahwlrW6MVe5ruqVI9-DuRRBlh-PQVnw-zFfWv_1Q/viewform",
+        permanent: false,
+      },
     ];
   },
 };
