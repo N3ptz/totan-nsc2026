@@ -1,4 +1,4 @@
-import { IsEmail, IsEnum, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsEnum, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
 import { UserRole } from '../../users/user.entity';
 
 export class RegisterDto {
@@ -18,9 +18,13 @@ export class RegisterDto {
   @IsNotEmpty()
   fullName: string;
 
-  // สำหรับ parent: ความสัมพันธ์กับเด็ก
+  // สำหรับ parent: ความสัมพันธ์กับเด็ก (ต้องมี validator ไม่งั้น ValidationPipe whitelist ตัดทิ้ง)
+  @IsOptional()
+  @IsIn(['father', 'mother', 'guardian'])
   relationship?: string;
 
   // สำหรับ parent: เบอร์โทร
+  @IsOptional()
+  @IsString()
   phone?: string;
 }

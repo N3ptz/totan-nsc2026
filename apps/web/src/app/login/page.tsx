@@ -8,6 +8,7 @@ import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { AvatarPicker } from "@/components/AvatarPicker";
 import { MascotBot } from "@/components/MascotBot";
+import { LoginHelpModal } from "@/components/LoginHelpModal";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function LoginPage() {
   const [regData, setRegData] = useState({ email: "", password: "", fullName: "", phone: "", relationship: "" });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   // OTP verification state
   const [verifyStep, setVerifyStep] = useState<{ email: string; password: string; avatarFile: File | null } | null>(null);
@@ -59,7 +61,7 @@ export default function LoginPage() {
         email: regData.email, password: regData.password,
         fullName: regData.fullName, role,
         phone: regData.phone || undefined,
-        relationship: role === "parent" ? regData.relationship : undefined,
+        relationship: role === "parent" ? regData.relationship || undefined : undefined,
       });
       setVerifyStep({ email: regData.email, password: regData.password, avatarFile });
       setOtp(["", "", "", "", "", ""]);
@@ -250,7 +252,17 @@ export default function LoginPage() {
 
         {/* Form area */}
         <div className="relative flex-1 flex items-center justify-center px-6 py-8">
-          <div className="w-full max-w-[420px] glass-strong rounded-3xl p-8 animate-fade-up">
+          <div className="relative w-full max-w-[420px] glass-strong rounded-3xl p-8 animate-fade-up">
+
+            {/* Help — คู่มือการใช้งาน */}
+            <button
+              onClick={() => setShowHelp(true)}
+              aria-label={lang === "th" ? "คู่มือการใช้งาน" : "How to use"}
+              title={lang === "th" ? "คู่มือการใช้งาน" : "How to use"}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full border border-border text-muted hover:text-primary hover:border-primary/50 flex items-center justify-center text-sm font-bold transition-all"
+            >
+              ?
+            </button>
 
             {/* Mobile logo */}
             <div className="lg:hidden mb-7 text-center">
@@ -489,6 +501,27 @@ export default function LoginPage() {
                   </Field>
                 )}
 
+                {role === "parent" && (
+                  <Field label={tl.relationship}>
+                    <div className="grid grid-cols-3 gap-2 mt-1">
+                      {([
+                        { v: "mother",   label: tl.relMother },
+                        { v: "father",   label: tl.relFather },
+                        { v: "guardian", label: tl.relGuardian },
+                      ] as const).map(r => (
+                        <button key={r.v} type="button"
+                          onClick={() => setRegData(d => ({ ...d, relationship: r.v }))}
+                          className="py-2.5 rounded-xl border text-sm font-body font-semibold transition-all"
+                          style={regData.relationship === r.v
+                            ? { borderColor: "rgb(var(--primary))", background: "rgb(var(--primary)/0.08)", color: "rgb(var(--primary))" }
+                            : { borderColor: "rgb(var(--border))", color: "rgb(var(--muted))" }}>
+                          {r.label}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                )}
+
                 <SubmitBtn loading={loading} label={tl.registerBtn} processing={tl.processing} />
                 <p className="text-center text-sm font-body text-muted">
                   {tl.hasAccount}{" "}
@@ -509,6 +542,8 @@ export default function LoginPage() {
           <p className="text-[11px] font-body text-muted/60">© 2026 โตทัน · Mahidol University</p>
         </div>
       </div>
+
+      {showHelp && <LoginHelpModal th={lang === "th"} onClose={() => setShowHelp(false)} />}
 
     </div>
   );
