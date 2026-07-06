@@ -119,5 +119,8 @@ curl https://<gateway>/notify/health
 ## ข้อควรรู้
 - Railway ไม่มี GPU → `DEVICE=cpu` (bone age มาจาก HF Space อยู่แล้ว ไม่กระทบ)
 - Rate limit ของ gateway เป็น in-memory — ถ้า scale gateway หลาย replica ต้องย้ายไป Redis
-- Gmail SMTP ลิมิต ~500 ฉบับ/วัน → production จริงแนะนำ Resend/Brevo
+- ⚠️ **Railway บล็อก outbound SMTP ทุกพอร์ต** (ยกเว้น Pro plan) — ต้องตั้ง
+  `BREVO_API_KEY` ที่ auth-service และ notify-service เพื่อส่งเมลผ่าน Brevo HTTP
+  API (ฟรี 300 ฉบับ/วัน, verify sender email ใน Brevo ก่อน) ตัวแปร SMTP_* จะถูก
+  ข้ามเมื่อมี key นี้
 - ค่าใช้จ่ายประมาณ $10–25/เดือน (Postgres 1 instance 2 databases + Redis + 5 services)
