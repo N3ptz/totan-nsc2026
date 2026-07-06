@@ -126,7 +126,9 @@ export class AuthService {
       verifyOtpAttempts: 0,
     });
 
-    this.emailService.sendVerifyOtp(email, otp).catch(() => {});
+    this.emailService.sendVerifyOtp(email, otp).catch((err) => {
+      this.logger.error(`Failed to resend OTP to ${email}: ${err?.message}`);
+    });
 
     return { message: 'ส่ง OTP ใหม่แล้ว กรุณาตรวจสอบ email' };
   }
