@@ -70,7 +70,8 @@ export const childrenApi = {
   list: () => apiClient.get<Child[]>('/children'),
   get: (id: string) => apiClient.get<Child>(`/children/${id}`),
   create: (data: CreateChildPayload) => apiClient.post<Child>('/children', data),
-  update: (id: string, data: Partial<CreateChildPayload>) => apiClient.patch<Child>(`/children/${id}`, data),
+  update: (id: string, data: Partial<CreateChildPayload> & { parentId?: string | null }) =>
+    apiClient.patch<Child>(`/children/${id}`, data),
   delete: (id: string) => apiClient.delete<{ message: string }>(`/children/${id}`),
 };
 
@@ -121,7 +122,7 @@ export interface Child {
   name: string;
   dateOfBirth: string;
   sex: 'M' | 'F';
-  parentId: string;
+  parentId: string | null;
   doctorId: string;
   ethnicity: string;
   heightCm?: number;

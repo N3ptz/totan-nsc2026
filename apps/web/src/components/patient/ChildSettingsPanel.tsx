@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { childrenApi, type Child } from "@/lib/api";
+import { useRef, useState } from "react";
+import { childrenApi, authApi, type Child } from "@/lib/api";
 
 export function ChildSettingsPanel({
   child, onClose, onSaved, lang,
@@ -24,6 +24,37 @@ export function ChildSettingsPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState("");
 
+  // ── เชื่อมผู้ปกครองภายหลัง (เหมือนหน้าเพิ่มผู้ป่วย) ──
+  const [parentEmail, setParentEmail] = useState("");
+  const [parentLookup, setParentLookup] = useState<
+    "idle" | "checking" | "found" | "not_found" | "wrong_role"
+  >("idle");
+  const [newParentId, setNewParentId] = useState<string | undefined>(undefined);
+  const [unlink, setUnlink] = useState(false);
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleParentEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const email = e.target.value;
+    setParentEmail(email);
+    setNewParentId(undefined);
+
+    if (lookupTimer.current) clearTimeout(lookupTimer.current);
+    if (!email) { setParentLookup("idle"); return; }
+
+    setParentLookup("checking");
+    lookupTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await authApi.findByEmail(email);
+        if (!data) { setParentLookup("not_found"); return; }
+        if (data.role !== "parent") { setParentLookup("wrong_role"); return; }
+        setNewParentId(data.id);
+        setParentLookup("found");
+      } catch {
+        setParentLookup("not_found");
+      }
+    }, 600);
+  };
+
   const set = (k: keyof typeof form) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm(f => ({ ...f, [k]: e.target.value }));
@@ -42,6 +73,8 @@ export function ChildSettingsPanel({
         motherHeightCm: form.motherHeightCm ? Number(form.motherHeightCm) : undefined,
         clinicalNotes: form.clinicalNotes || undefined,
       };
+      if (newParentId) payload.parentId = newParentId;
+      else if (unlink) payload.parentId = null;
       const { data } = await childrenApi.update(child.id, payload);
       onSaved(data);
     } catch (err: any) {
@@ -146,6 +179,90 @@ export function ChildSettingsPanel({
                   value={form.motherHeightCm} onChange={set("motherHeightCm")} placeholder="158.0" className="input-base" />
               </div>
             </div>
+          </div>
+
+          <div>
+            <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide mb-3">
+              {th ? "ผู้ปกครอง" : "Parent Link"}
+            </p>
+
+            {/* สถานะปัจจุบัน */}
+            {child.parentId && !unlink && !newParentId && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl mb-3"
+                style={{ background: "rgb(var(--success)/0.08)", border: "1px solid rgb(var(--success)/0.25)" }}>
+                <p className="font-body text-xs text-success font-semibold">
+                  {th ? "✓ เชื่อมกับผู้ปกครองแล้ว" : "✓ Linked to a parent"}
+                </p>
+                <button type="button" onClick={() => setUnlink(true)}
+                  className="font-body text-xs font-semibold text-danger hover:underline flex-shrink-0">
+                  {th ? "ยกเลิกการเชื่อม" : "Unlink"}
+                </button>
+              </div>
+            )}
+            {unlink && !newParentId && (
+              <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl mb-3"
+                style={{ background: "rgb(var(--danger)/0.08)", border: "1px solid rgb(var(--danger)/0.25)" }}>
+                <p className="font-body text-xs text-danger font-semibold">
+                  {th ? "จะยกเลิกการเชื่อมเมื่อกดบันทึก" : "Will be unlinked on save"}
+                </p>
+                <button type="button" onClick={() => setUnlink(false)}
+                  className="font-body text-xs font-semibold text-muted hover:underline flex-shrink-0">
+                  {th ? "เลิกทำ" : "Undo"}
+                </button>
+              </div>
+            )}
+
+            {/* กรอกอีเมลเพื่อเชื่อม/เปลี่ยนผู้ปกครอง */}
+            <label className="block font-body text-xs font-semibold text-muted mb-1.5">
+              {child.parentId
+                ? (th ? "เปลี่ยนผู้ปกครอง (กรอกอีเมล)" : "Change parent (enter email)")
+                : (th ? "อีเมลผู้ปกครอง" : "Parent Email")}
+            </label>
+            <div className="relative">
+              <input
+                type="email"
+                value={parentEmail}
+                onChange={handleParentEmailChange}
+                placeholder="parent@example.com"
+                className={`input-base pr-10 ${
+                  parentLookup === "found" ? "border-success/50 focus:ring-success/15" :
+                  parentLookup === "not_found" || parentLookup === "wrong_role" ? "border-danger/50 focus:ring-danger/15" : ""
+                }`}
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                {parentLookup === "checking" && (
+                  <svg className="w-4 h-4 animate-spin text-muted" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                  </svg>
+                )}
+                {parentLookup === "found" && (
+                  <svg className="w-4 h-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                  </svg>
+                )}
+                {(parentLookup === "not_found" || parentLookup === "wrong_role") && (
+                  <svg className="w-4 h-4 text-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                )}
+              </div>
+            </div>
+            {parentLookup === "found" && (
+              <p className="font-body text-xs text-success mt-1">
+                {th ? "✓ พบผู้ปกครอง — จะเชื่อมเมื่อกดบันทึก" : "✓ Parent found — will be linked on save"}
+              </p>
+            )}
+            {parentLookup === "not_found" && (
+              <p className="font-body text-xs text-danger mt-1">
+                {th ? "ไม่พบผู้ใช้ด้วยอีเมลนี้" : "No user found with this email"}
+              </p>
+            )}
+            {parentLookup === "wrong_role" && (
+              <p className="font-body text-xs text-danger mt-1">
+                {th ? "ผู้ใช้นี้ไม่ใช่ผู้ปกครอง" : "This user is not registered as a parent"}
+              </p>
+            )}
           </div>
 
           <div>
