@@ -195,9 +195,9 @@ export default function LoginPage() {
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { v: "95%+", l: tl.s1 },
-              { v: "<30s", l: tl.s2 },
-              { v: "RBAC", l: tl.s3 },
+              { v: "4.36", l: tl.s1 },
+              { v: "<10s", l: tl.s2 },
+              { v: "Low Bias", l: tl.s3 },
             ].map((s, i) => (
               <div key={s.l} className="rounded-2xl p-4 text-center transition-transform hover:-translate-y-1 animate-fade-up"
                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", backdropFilter: "blur(8px)", animationDelay: `${i * 100}ms` }}>

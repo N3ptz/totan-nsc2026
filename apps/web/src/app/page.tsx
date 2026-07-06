@@ -40,7 +40,7 @@ function useReveal(ready = true) {
 }
 
 /** Count-up number animation, triggered when element enters view. */
-function useCountUp(target: number, duration = 1400) {
+function useCountUp(target: number, duration = 1400, decimals = 0) {
   const ref = useRef<HTMLSpanElement>(null);
   const [val, setVal] = useState(0);
   useEffect(() => {
@@ -53,7 +53,7 @@ function useCountUp(target: number, duration = 1400) {
         const tick = (t: number) => {
           const p = Math.min((t - t0) / duration, 1);
           const eased = 1 - Math.pow(1 - p, 3);
-          setVal(Math.round(eased * target));
+          setVal(Number((eased * target).toFixed(decimals)));
           if (p < 1) raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);
@@ -61,7 +61,7 @@ function useCountUp(target: number, duration = 1400) {
     }, { threshold: 0.5 });
     obs.observe(node);
     return () => { obs.disconnect(); cancelAnimationFrame(raf); };
-  }, [target, duration]);
+  }, [target, duration, decimals]);
   return { ref, val };
 }
 
@@ -433,10 +433,10 @@ export default function Home() {
         {/* ── Proof strip (marquee) ───────────────────────────────────────── */}
         <section aria-label="Key metrics" className="bg-bg border-b border-border overflow-hidden">
           <div className="max-w-5xl mx-auto px-6 py-9 grid grid-cols-2 md:grid-cols-4 gap-6">
-            <StatBlock value={95} suffix="%+" label={th ? "ความแม่นยำ" : "Accuracy"} />
-            <StatBlock value={30} prefix="<" suffix="s" label={th ? "เวลาวิเคราะห์" : "Analysis time"} />
-            <StaticStat value="G&P" label={th ? "มาตรฐาน Atlas" : "Atlas Standard"} />
-            <StaticStat value="RBAC" label={th ? "แยกสิทธิ์" : "Role-based access"} />
+            <StatBlock value={10} prefix="<" suffix="s" label={th ? "เวลาวิเคราะห์" : "Analysis time"} />
+            <StatBlock value={6.11} decimals={2} label={th ? "Val MAE (เดือน)" : "Val MAE (months)"} />
+            <StatBlock value={4.36} decimals={2} label={th ? "Test MAE (เดือน)" : "Test MAE (months)"} />
+            <StaticStat value="Low Bias" label={th ? "ความเอนเอียงของโมเดลต่ำ" : "Minimal model bias"} />
           </div>
         </section>
 
@@ -668,8 +668,8 @@ function Particles() {
 }
 
 // ── Stat blocks ─────────────────────────────────────────────────────────────────
-function StatBlock({ value, prefix = "", suffix = "", label }: { value: number; prefix?: string; suffix?: string; label: string }) {
-  const { ref, val } = useCountUp(value);
+function StatBlock({ value, prefix = "", suffix = "", label, decimals = 0 }: { value: number; prefix?: string; suffix?: string; label: string; decimals?: number }) {
+  const { ref, val } = useCountUp(value, 1400, decimals);
   return (
     <div className="text-center sm:text-left">
       <div className="font-display font-bold text-ink tabular-nums" style={{ fontSize: "2rem", letterSpacing: "-0.02em" }}>
