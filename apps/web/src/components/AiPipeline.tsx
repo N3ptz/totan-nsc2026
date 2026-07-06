@@ -1,19 +1,22 @@
 "use client";
 
 /**
- * AiPipeline — scroll-driven AI storytelling.
+ * AiPipeline — step-by-step AI walkthrough.
  *
- * The section is tall (steps+1 × 100svh). A sticky inner panel holds the split
- * layout: left = step text that transitions as the user scrolls; right = the
- * R3F holographic hand that reacts to the active step via shader uniforms.
+ * A normal-flow section (no scroll hijack): left = step narrative with
+ * prev/next controls and clickable progress dots; right = the holographic
+ * hand inside a dark "X-ray viewer" panel that reacts to the active step.
+ * The viewer stays dark in both themes (radiographs read on dark); the
+ * section shell follows the app theme.
  *
- * Scroll math:
- *   progress = (-containerRect.top) / (containerH - viewportH)   [0 → 1]
- *   step     = clamp(floor(progress × n), 0, n-1)
+ * All steps are rendered stacked in one grid cell (inactive ones
+ * visibility:hidden) so the card height equals the tallest step at any
+ * width — the controls below never jump when the step changes.
  */
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { useTheme } from "@/lib/theme";
 
 // ── 3D model (WebGL only) ────────────────────────────────────────────────────
 const AiHandModel = dynamic(() => import("./three/AiHandModel"), {
@@ -62,11 +65,84 @@ function ModelFallback({ step, th }: { step: number; th: boolean }) {
   );
 }
 
+// ── Theme palette — one place for every dark/light pair in this section ──────
+interface Pal {
+  chipBg: string; chipBorder: string; chipText: string;
+  panelBg: string; panelBorder: string;
+  cardBg: string; cardBorder: string;
+  success: string; successDot: string; successBg: string; successBorder: string;
+  arrowFg: string; arrowBg: string; arrowBorder: string;
+  dotIdle: string;
+  accents: { sky: string; mint: string; coral: string; violet: string };
+}
+
+const PALETTE: { dark: Pal; light: Pal } = {
+  dark: {
+    chipBg: "rgba(56,189,248,0.10)", chipBorder: "rgba(56,189,248,0.25)", chipText: "#7dd3fc",
+    panelBg: "rgba(14,165,233,0.12)", panelBorder: "rgba(56,189,248,0.25)",
+    cardBg: "rgba(8,20,34,0.5)", cardBorder: "rgba(56,189,248,0.16)",
+    success: "#6ee7b7", successDot: "#34D399", successBg: "rgba(52,211,153,0.18)", successBorder: "rgba(52,211,153,0.4)",
+    arrowFg: "#E2E8F0", arrowBg: "rgba(56,189,248,0.10)", arrowBorder: "rgba(56,189,248,0.30)",
+    dotIdle: "rgba(56,189,248,0.22)",
+    accents: { sky: "#38BDF8", mint: "#34D399", coral: "#FB923C", violet: "#A78BFA" },
+  },
+  light: {
+    chipBg: "rgba(2,132,199,0.07)", chipBorder: "rgba(2,132,199,0.25)", chipText: "#0369A1",
+    panelBg: "rgba(14,165,233,0.08)", panelBorder: "rgba(2,132,199,0.22)",
+    cardBg: "rgba(255,255,255,0.9)", cardBorder: "rgba(2,132,199,0.18)",
+    success: "#047857", successDot: "#059669", successBg: "rgba(16,185,129,0.12)", successBorder: "rgba(5,150,105,0.35)",
+    arrowFg: "#0369A1", arrowBg: "rgba(2,132,199,0.07)", arrowBorder: "rgba(2,132,199,0.30)",
+    dotIdle: "rgba(2,132,199,0.20)",
+    accents: { sky: "#0284C7", mint: "#059669", coral: "#C2410C", violet: "#7C3AED" },
+  },
+};
+
+type AccentKey = keyof Pal["accents"];
+
+// ── Static content (written once; colors resolved from the palette) ──────────
+const STEPS = {
+  th: [
+    { model: "DeepLabV3",                       title: "แยกมือออกจากพื้นหลัง",           body: "ปรับภาพเป็น 512×512 เกรย์สเกล แล้วลบพื้นหลังให้เหลือเฉพาะโครงสร้างมือ ลดสัญญาณรบกวนก่อนวิเคราะห์" },
+    { model: "YOLOv11",                         title: "ดึง 3 พื้นที่กระดูกสำคัญ",         body: "ครอบตัดกระดูกข้อมือ (Carpals), กระดูกนิ้ว (Phalanges) และรอยต่อปลายแขน (Radius/Ulna) อย่างแม่นยำ" },
+    { model: "ConvNeXt Tiny",                   title: "ประเมินอายุกระดูก",               body: "รับ 3 ภาพ ROI + เพศ ผ่าน pre-train บน RSNA และ fine-tune บน Digital Hand Atlas คืนค่าอายุกระดูกเป็นเดือน" },
+    { model: "Variance Reg. + Balanced Sampling", title: "ลดอคติ เที่ยงตรงทุกเชื้อชาติ", body: "Partial fine-tuning พร้อมลงโทษโมเดลเมื่อ error ของเชื้อชาติใดต่างจากกลุ่มอื่น บังคับให้ค่าความคลาดเคลื่อนใกล้กันทุกกลุ่ม" },
+    { model: "Grad-CAM · Bayley-Pinneau",        title: "อธิบายผล + พยากรณ์ส่วนสูง",       body: "สร้างแผนที่ความร้อนชี้จุดที่โมเดลใช้ตัดสินใจ และพยากรณ์ส่วนสูงเมื่อโตเต็มวัยด้วยวิธี Bayley-Pinneau เทียบเกณฑ์เด็กไทย" },
+  ],
+  en: [
+    { model: "DeepLabV3",                       title: "Isolate the hand",               body: "Resize to 512×512 grayscale and strip the background to the hand structure only, cutting noise before analysis." },
+    { model: "YOLOv11",                         title: "Extract 3 bone regions",         body: "Precisely crop the wrist (Carpals), fingers (Phalanges), and forearm joint (Radius/Ulna)." },
+    { model: "ConvNeXt Tiny",                   title: "Assess bone age",                body: "Takes the 3 ROIs + sex, pre-trained on RSNA and fine-tuned on the Digital Hand Atlas, returns bone age in months." },
+    { model: "Variance Reg. + Balanced Sampling", title: "Debias across ethnicities",    body: "Partial fine-tuning that penalizes the model when any ethnicity's error drifts from the rest, forcing equal accuracy across all groups." },
+    { model: "Grad-CAM · Bayley-Pinneau",        title: "Explain + forecast height",      body: "Builds a heatmap of exactly where the model looked, then forecasts adult height via the Bayley-Pinneau method against Thai growth standards." },
+  ],
+};
+
+const ROI_CHIPS: { t: string; k: AccentKey }[] = [
+  { t: "Phalanges", k: "sky" }, { t: "Carpals", k: "mint" }, { t: "Radius/Ulna", k: "coral" },
+];
+
+const FAIR_GROUPS: { th: string; en: string; v: string; k: AccentKey }[] = [
+  { th: "เอเชีย",  en: "Asia",   v: "6.5", k: "sky" },
+  { th: "ยุโรป",   en: "Europe", v: "6.6", k: "mint" },
+  { th: "แอฟ.",    en: "Africa", v: "6.4", k: "coral" },
+  { th: "อเมใต้", en: "S.Am.",  v: "6.5", k: "violet" },
+];
+
+const GROWTH_STATS = {
+  th: [{ k: "ส่วนสูงคาด", v: "172 cm" }, { k: "เป้าหมาย", v: "170 cm" }, { k: "สูง P", v: "P60" }, { k: "หนัก P", v: "P55" }, { k: "BMI", v: "16.8" }, { k: "ภาวะ", v: "Normal" }],
+  en: [{ k: "Adult ht.", v: "172 cm" }, { k: "Target", v: "170 cm" }, { k: "Height P", v: "P60" }, { k: "Weight P", v: "P55" }, { k: "BMI", v: "16.8" }, { k: "Status", v: "Normal" }],
+};
+
+const FINAL_OUTPUT = {
+  th: [{ k: "อายุกระดูก", v: "8y4m" }, { k: "มั่นใจ", v: "96%" }, { k: "FAH", v: "172cm" }, { k: "pct", v: "P60" }, { k: "ภาวะ", v: "ปกติ" }, { k: "fair", v: "✓" }],
+  en: [{ k: "bone age", v: "8y4m" }, { k: "conf", v: "96%" }, { k: "FAH", v: "172cm" }, { k: "pct", v: "P60" }, { k: "status", v: "Normal" }, { k: "fair", v: "✓" }],
+};
+
 // ── Per-step supporting data chips/metrics ────────────────────────────────────
-function StepData({ i, th }: { i: number; th: boolean }) {
-  const chip = (t: string, c = "#7dd3fc") => (
+function StepData({ i, th, pal }: { i: number; th: boolean; pal: Pal }) {
+  const chip = (t: string, c: string = pal.chipText) => (
     <span key={t} className="font-mono text-[11px] px-2.5 py-1 rounded-lg"
-      style={{ background: "rgba(56,189,248,0.1)", color: c, border: `1px solid ${c}33` }}>{t}</span>
+      style={{ background: pal.chipBg, color: c, border: `1px solid ${c}33` }}>{t}</span>
   );
 
   if (i === 0) return (
@@ -76,137 +152,131 @@ function StepData({ i, th }: { i: number; th: boolean }) {
   );
 
   if (i === 1) return (
-    <div className="flex flex-wrap gap-2">
-      {[{ t: "Phalanges", c: "#38BDF8" }, { t: "Carpals", c: "#34D399" }, { t: "Radius/Ulna", c: "#FB923C" }].map((r) => chip(r.t, r.c))}
-    </div>
+    <div className="flex flex-wrap gap-2">{ROI_CHIPS.map((r) => chip(r.t, pal.accents[r.k]))}</div>
   );
 
   if (i === 2) return (
-    <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-xl"
-      style={{ background: "rgba(14,165,233,0.12)", border: "1px solid rgba(56,189,248,0.25)" }}>
+    <div className="inline-flex items-center gap-3 px-4 py-2.5 rounded-xl self-start"
+      style={{ background: pal.panelBg, border: `1px solid ${pal.panelBorder}` }}>
       <div>
-        <p className="font-mono text-[10px]" style={{ color: "rgba(148,163,184,0.9)" }}>bone age</p>
-        <p className="font-display font-bold text-white text-xl tabular-nums leading-none">
+        <p className="font-mono text-[10px] text-muted">bone age</p>
+        <p className="font-display font-bold text-ink text-xl tabular-nums leading-none">
           100<span className="text-xs font-mono"> mo</span>
         </p>
       </div>
-      <div className="h-8 w-px" style={{ background: "rgba(56,189,248,0.25)" }} />
-      <p className="font-display font-semibold text-sm" style={{ color: "#6ee7b7" }}>
-        = 8y 4m<br /><span className="font-mono text-[11px] text-white/70">conf 96%</span>
+      <div className="h-8 w-px" style={{ background: pal.panelBorder }} />
+      <p className="font-display font-semibold text-sm" style={{ color: pal.success }}>
+        = 8y 4m<br /><span className="font-mono text-[11px] text-muted">conf 96%</span>
       </p>
     </div>
   );
 
-  if (i === 3) {
-    const groups = [
-      { n: th ? "เอเชีย"    : "Asia",       v: "6.5", c: "#38BDF8" },
-      { n: th ? "ยุโรป"     : "Europe",     v: "6.6", c: "#34D399" },
-      { n: th ? "แอฟ."      : "Africa",     v: "6.4", c: "#FB923C" },
-      { n: th ? "อเมใต้"   : "S.Am.",      v: "6.5", c: "#A78BFA" },
-    ];
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-display font-bold"
-          style={{ background: "rgba(52,211,153,0.18)", color: "#6ee7b7", border: "1px solid rgba(52,211,153,0.4)" }}>
-          ✓ {th ? "MAE สมดุลทุกกลุ่ม" : "balanced MAE"}
+  if (i === 3) return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-display font-bold"
+        style={{ background: pal.successBg, color: pal.success, border: `1px solid ${pal.successBorder}` }}>
+        ✓ {th ? "MAE สมดุลทุกกลุ่ม" : "balanced MAE"}
+      </span>
+      {FAIR_GROUPS.map((g) => (
+        <span key={g.en} className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-lg"
+          style={{ background: pal.chipBg, border: `1px solid ${pal.accents[g.k]}33` }}>
+          <span className="text-muted">{th ? g.th : g.en}</span>
+          <span className="tabular-nums" style={{ color: pal.accents[g.k] }}>{g.v}</span>
         </span>
-        {groups.map((g) => (
-          <span key={g.n} className="inline-flex items-center gap-1.5 font-mono text-[11px] px-2.5 py-1 rounded-lg"
-            style={{ background: "rgba(56,189,248,0.1)", border: `1px solid ${g.c}33` }}>
-            <span style={{ color: "rgba(148,163,184,0.9)" }}>{g.n}</span>
-            <span className="tabular-nums" style={{ color: g.c }}>{g.v}</span>
+      ))}
+    </div>
+  );
+
+  // i === 4 — growth stats
+  return (
+    <div className="grid grid-cols-3 gap-2 max-w-xs">
+      {GROWTH_STATS[th ? "th" : "en"].map((s) => (
+        <div key={s.k} className="rounded-lg px-2.5 py-1.5"
+          style={{ background: pal.cardBg, border: `1px solid ${pal.cardBorder}` }}>
+          <p className="font-mono text-[8px] truncate text-muted">{s.k}</p>
+          <p className="font-display font-bold text-ink text-[13px] tabular-nums">{s.v}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Progress dot strip (clickable, ≥24px hit targets) ─────────────────────────
+function ProgressDots({ total, active, pal, th, onSelect }:
+  { total: number; active: number; pal: Pal; th: boolean; onSelect: (i: number) => void }) {
+  return (
+    <div className="flex items-center">
+      {Array.from({ length: total }).map((_, i) => (
+        <button key={i} onClick={() => onSelect(i)}
+          aria-label={th ? `ไปขั้นตอนที่ ${i + 1}` : `Go to step ${i + 1}`}
+          aria-current={i === active ? "step" : undefined}
+          className="h-6 min-w-6 px-0.5 grid place-items-center cursor-pointer">
+          <span className="block rounded-full transition-all duration-500"
+            style={{
+              width: i === active ? 28 : 10, height: 10,
+              background: i === active ? "rgb(var(--primary))" : pal.dotIdle,
+            }} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Final output strip (rendered only on the last step) ───────────────────────
+function FinalOutput({ th, pal }: { th: boolean; pal: Pal }) {
+  return (
+    <div className="rounded-2xl px-4 py-3"
+      style={{ background: "rgba(16,185,129,0.07)", border: `1px solid ${pal.successBorder}` }}>
+      <div className="flex items-center gap-2 mb-2">
+        <span className="w-1.5 h-1.5 rounded-full" style={{ background: pal.successDot }} />
+        <span className="font-display font-bold text-[10px] tracking-widest uppercase" style={{ color: pal.success }}>
+          {th ? "ผลลัพธ์สุดท้าย" : "Final Output"}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {FINAL_OUTPUT[th ? "th" : "en"].map((o) => (
+          <span key={o.k} className="inline-flex items-center gap-1 rounded-lg px-2 py-1"
+            style={{ background: pal.cardBg, border: `1px solid ${pal.cardBorder}` }}>
+            <span className="font-body text-[9px] text-muted">{o.k}</span>
+            <span className="font-display font-bold text-ink text-[11px] tabular-nums">{o.v}</span>
           </span>
         ))}
       </div>
-    );
-  }
-
-  // i === 4 — growth stats
-  const stats = th
-    ? [{ k: "ส่วนสูงคาด", v: "172 cm" }, { k: "เป้าหมาย", v: "170 cm" }, { k: "สูง P", v: "P60" }, { k: "หนัก P", v: "P55" }, { k: "BMI", v: "16.8" }, { k: "ภาวะ", v: "Normal" }]
-    : [{ k: "Adult ht.", v: "172 cm" }, { k: "Target", v: "170 cm" }, { k: "Height P", v: "P60" }, { k: "Weight P", v: "P55" }, { k: "BMI", v: "16.8" }, { k: "Status", v: "Normal" }];
-  return (
-    <div className="grid grid-cols-3 gap-2 max-w-xs">
-      {stats.map((s) => (
-        <div key={s.k} className="rounded-lg px-2.5 py-1.5"
-          style={{ background: "rgba(8,20,34,0.5)", border: "1px solid rgba(56,189,248,0.16)" }}>
-          <p className="font-mono text-[8px] truncate" style={{ color: "rgba(148,163,184,0.85)" }}>{s.k}</p>
-          <p className="font-display font-bold text-white text-[13px] tabular-nums">{s.v}</p>
-        </div>
-      ))}
     </div>
   );
 }
 
-// ── Progress dot strip ────────────────────────────────────────────────────────
-function ProgressDots({ total, active }: { total: number; active: number }) {
+// ── Prev/Next arrow button ────────────────────────────────────────────────────
+// aria-disabled + click guard instead of the native disabled attribute, so
+// keyboard focus isn't dropped to <body> when the range end is reached.
+function ArrowBtn({ dir, onClick, disabled, pal, label }:
+  { dir: "prev" | "next"; onClick: () => void; disabled: boolean; pal: Pal; label: string }) {
   return (
-    <div className="flex items-center gap-2">
-      {Array.from({ length: total }).map((_, i) => (
-        <div key={i} className="rounded-full transition-all duration-500"
-          style={{
-            width: i === active ? 28 : 8, height: 8,
-            background: i === active ? "rgb(var(--aurora-1))" : "rgba(56,189,248,0.22)",
-          }} />
-      ))}
-    </div>
-  );
-}
-
-// ── Final output strip (shown at the end of the scroll journey) ───────────────
-function FinalOutput({ th, visible }: { th: boolean; visible: boolean }) {
-  const output = th
-    ? [{ k: "อายุกระดูก", v: "8y4m" }, { k: "มั่นใจ", v: "96%" }, { k: "FAH", v: "172cm" }, { k: "pct", v: "P60" }, { k: "ภาวะ", v: "ปกติ" }, { k: "fair", v: "✓" }]
-    : [{ k: "bone age", v: "8y4m" }, { k: "conf", v: "96%" }, { k: "FAH", v: "172cm" }, { k: "pct", v: "P60" }, { k: "status", v: "Normal" }, { k: "fair", v: "✓" }];
-
-  return (
-    <div className="transition-all duration-700" style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0)" : "translateY(12px)" }}>
-      <div className="rounded-2xl px-4 py-3"
-        style={{ background: "rgba(16,185,129,0.07)", border: "1px solid rgba(52,211,153,0.28)" }}>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="w-1.5 h-1.5 rounded-full" style={{ background: "#34D399" }} />
-          <span className="font-display font-bold text-[10px] tracking-widest uppercase" style={{ color: "#6ee7b7" }}>
-            {th ? "ผลลัพธ์สุดท้าย" : "Final Output"}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {output.map((o) => (
-            <span key={o.k} className="inline-flex items-center gap-1 rounded-lg px-2 py-1"
-              style={{ background: "rgba(8,20,34,0.5)", border: "1px solid rgba(56,189,248,0.16)" }}>
-              <span className="font-body text-[9px]" style={{ color: "rgba(148,163,184,0.85)" }}>{o.k}</span>
-              <span className="font-display font-bold text-white text-[11px] tabular-nums">{o.v}</span>
-            </span>
-          ))}
-        </div>
-      </div>
-    </div>
+    <button onClick={() => { if (!disabled) onClick(); }} aria-disabled={disabled} aria-label={label}
+      className={`w-11 h-11 rounded-full grid place-items-center transition-all duration-200 active:scale-95 ${
+        disabled ? "opacity-30 cursor-not-allowed" : "hover:-translate-y-0.5"}`}
+      style={{ color: pal.arrowFg, background: pal.arrowBg, border: `1px solid ${pal.arrowBorder}` }}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="w-5 h-5">
+        {dir === "prev"
+          ? <path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" />
+          : <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />}
+      </svg>
+    </button>
   );
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function AiPipeline({ lang }: { lang: string }) {
   const th = lang === "th";
+  const { theme } = useTheme();
+  const dark = theme === "dark";
+  const pal = dark ? PALETTE.dark : PALETTE.light;
 
-  const steps = th ? [
-    { model: "DeepLabV3",                       title: "แยกมือออกจากพื้นหลัง",           body: "ปรับภาพเป็น 512×512 เกรย์สเกล แล้วลบพื้นหลังให้เหลือเฉพาะโครงสร้างมือ ลดสัญญาณรบกวนก่อนวิเคราะห์" },
-    { model: "YOLOv11",                         title: "ดึง 3 พื้นที่กระดูกสำคัญ",         body: "ครอบตัดกระดูกข้อมือ (Carpals), กระดูกนิ้ว (Phalanges) และรอยต่อปลายแขน (Radius/Ulna) อย่างแม่นยำ" },
-    { model: "ConvNeXt Tiny",                   title: "ประเมินอายุกระดูก",               body: "รับ 3 ภาพ ROI + เพศ ผ่าน pre-train บน RSNA และ fine-tune บน Digital Hand Atlas คืนค่าอายุกระดูกเป็นเดือน" },
-    { model: "Variance Reg. + Balanced Sampling", title: "ลดอคติ เที่ยงตรงทุกเชื้อชาติ", body: "Partial fine-tuning พร้อมลงโทษโมเดลเมื่อ error ของเชื้อชาติใดต่างจากกลุ่มอื่น บังคับให้ค่าความคลาดเคลื่อนใกล้กันทุกกลุ่ม" },
-    { model: "Grad-CAM · Bayley-Pinneau",        title: "อธิบายผล + พยากรณ์ส่วนสูง",       body: "สร้างแผนที่ความร้อนชี้จุดที่โมเดลใช้ตัดสินใจ และพยากรณ์ส่วนสูงเมื่อโตเต็มวัยด้วยวิธี Bayley-Pinneau เทียบเกณฑ์เด็กไทย" },
-  ] : [
-    { model: "DeepLabV3",                       title: "Isolate the hand",               body: "Resize to 512×512 grayscale and strip the background to the hand structure only, cutting noise before analysis." },
-    { model: "YOLOv11",                         title: "Extract 3 bone regions",         body: "Precisely crop the wrist (Carpals), fingers (Phalanges), and forearm joint (Radius/Ulna)." },
-    { model: "ConvNeXt Tiny",                   title: "Assess bone age",                body: "Takes the 3 ROIs + sex, pre-trained on RSNA and fine-tuned on the Digital Hand Atlas, returns bone age in months." },
-    { model: "Variance Reg. + Balanced Sampling", title: "Debias across ethnicities",    body: "Partial fine-tuning that penalizes the model when any ethnicity's error drifts from the rest, forcing equal accuracy across all groups." },
-    { model: "Grad-CAM · Bayley-Pinneau",        title: "Explain + forecast height",      body: "Builds a heatmap of exactly where the model looked, then forecasts adult height via the Bayley-Pinneau method against Thai growth standards." },
-  ];
-
+  const steps = STEPS[th ? "th" : "en"];
   const n = steps.length;
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [step,      setStep]    = useState(0);
-  const [progress,  setProgress] = useState(0);
-  const [mounted,   setMounted]  = useState(false);
-  const [webgl,     setWebgl]    = useState(true);
+  const [step,    setStep]    = useState(0);
+  const [mounted, setMounted] = useState(false);
+  const [webgl,   setWebgl]   = useState(true);
 
   useEffect(() => {
     setMounted(true);
@@ -216,131 +286,140 @@ export default function AiPipeline({ lang }: { lang: string }) {
     setWebgl(hasWebGL() && big);
   }, []);
 
-  useEffect(() => {
-    const onScroll = () => {
-      const el = containerRef.current;
-      if (!el) return;
-      const rect      = el.getBoundingClientRect();
-      const scrollable = el.clientHeight - window.innerHeight;
-      if (scrollable <= 0) return;
-      const scrolled = Math.max(0, -rect.top);
-      const p = Math.min(1, scrolled / scrollable);
-      setProgress(p);
-      setStep(Math.min(n - 1, Math.floor(p * n)));
-    };
-    window.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [n]);
-
-  const showFinal = progress > 0.88;
+  const prev = () => setStep((s) => Math.max(0, s - 1));
+  const next = () => setStep((s) => Math.min(n - 1, s + 1));
 
   return (
-    <section id="ai" aria-labelledby="ai-heading">
-      {/* Outer scrollable container — each step gets 1 viewport of scroll travel */}
-      <div ref={containerRef} style={{ height: `calc(100svh * ${n + 1})` }}>
+    <section id="ai" aria-labelledby="ai-heading" className="relative overflow-hidden"
+      style={{ background: `linear-gradient(180deg, rgb(var(--bg)) 0%, ${dark ? "#071828" : "#EAF4FC"} 55%, rgb(var(--bg)) 100%)` }}>
 
-        {/* Sticky viewport — stays pinned for the entire scroll journey */}
-        <div style={{ position: "sticky", top: 0, height: "100svh", overflow: "hidden", zIndex: 10 }}
-          className="relative flex flex-col lg:grid lg:grid-cols-2">
+      {/* Subtle dot grid */}
+      <div className="absolute inset-0 pointer-events-none"
+        style={{ opacity: dark ? 0.045 : 0.06,
+                 backgroundImage: `radial-gradient(circle, ${dark ? "#38BDF8" : "#0EA5E9"} 1px, transparent 1px)`,
+                 backgroundSize: "32px 32px" }} />
 
-          {/* ── Dark background always — holographic 3D reads best on dark ── */}
-          <div className="absolute inset-0"
-            style={{ background: "linear-gradient(180deg, #05111f 0%, #071828 60%, #05111f 100%)" }} />
+      {/* Ambient glow blobs */}
+      <div className="absolute top-[5%] -right-48 w-[520px] h-[520px] rounded-full blur-[160px] pointer-events-none"
+        style={{ background: "#0EA5E9", opacity: dark ? 0.12 : 0.08 }} />
+      <div className="absolute bottom-[5%] -left-48 w-[480px] h-[480px] rounded-full blur-[160px] pointer-events-none"
+        style={{ background: "#7C3AED", opacity: dark ? 0.10 : 0.06 }} />
 
-          {/* Subtle dot grid */}
-          <div className="absolute inset-0 pointer-events-none opacity-[0.045]"
-            style={{ backgroundImage: "radial-gradient(circle, #38BDF8 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
+      <div className="relative max-w-7xl mx-auto grid lg:grid-cols-2 items-center gap-10 lg:gap-8
+                      px-6 lg:px-12 py-16 lg:py-14">
 
-          {/* Ambient glow blobs */}
-          <div className="absolute top-[5%] -right-48 w-[520px] h-[520px] rounded-full blur-[160px] pointer-events-none"
-            style={{ background: "#0EA5E9", opacity: 0.12 }} />
-          <div className="absolute bottom-[5%] -left-48 w-[480px] h-[480px] rounded-full blur-[160px] pointer-events-none"
-            style={{ background: "#7C3AED", opacity: 0.10 }} />
+        {/* ── Left: step narrative + controls ──────────────────────────────── */}
+        <div className="order-2 lg:order-1 flex flex-col">
 
-          {/* ── Left: step narrative ───────────────────────────────────────── */}
-          <div className="relative z-10 flex flex-col justify-center
-                          px-7 py-10 lg:px-12 xl:px-16
-                          order-2 lg:order-1
-                          overflow-y-auto lg:overflow-visible">
-
-            {/* Section heading — always visible */}
-            <div className="mb-8 lg:mb-10">
-              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-4
-                               font-display font-bold text-[10px] tracking-[0.16em] uppercase"
-                style={{ background: "rgba(56,189,248,0.12)", color: "#7dd3fc", border: "1px solid rgba(56,189,248,0.25)" }}>
-                Explainable · Fair · Deep Learning
-              </span>
-              <h2 id="ai-heading" className="font-display font-bold text-white"
-                style={{ fontSize: "clamp(1.7rem, 3.2vw, 2.6rem)", letterSpacing: "-0.025em" }}>
-                {th ? "AI คิดอะไรอยู่กันแน่" : "What the AI actually does"}
-              </h2>
-            </div>
-
-            {/* Animated step card — key forces remount & re-animate on step change */}
-            <div key={step} className="animate-step-in flex flex-col gap-5">
-
-              {/* Step number + model badge */}
-              <div className="flex items-center gap-3">
-                <span className="w-10 h-10 rounded-full grid place-items-center
-                                 font-display font-bold text-white text-[15px] shrink-0"
-                  style={{ background: "linear-gradient(135deg, rgb(var(--aurora-1)), rgb(var(--aurora-2)))",
-                           boxShadow: "0 6px 20px rgba(14,165,233,0.4)" }}>
-                  {step + 1}
-                </span>
-                <span className="font-mono text-[10px] px-2.5 py-1 rounded-lg"
-                  style={{ background: "rgba(56,189,248,0.10)", color: "#7dd3fc", border: "1px solid rgba(56,189,248,0.22)" }}>
-                  {steps[step].model}
-                </span>
-              </div>
-
-              {/* Step title */}
-              <h3 className="font-display font-bold text-white"
-                style={{ fontSize: "clamp(1.3rem, 2.4vw, 1.85rem)", letterSpacing: "-0.02em", lineHeight: 1.22 }}>
-                {steps[step].title}
-              </h3>
-
-              {/* Step body */}
-              <p className="font-body leading-relaxed"
-                style={{ color: "rgba(203,213,225,0.85)", fontSize: "clamp(0.9rem, 1.2vw, 1.0625rem)", maxWidth: "46ch" }}>
-                {steps[step].body}
-              </p>
-
-              {/* Step-specific data */}
-              <StepData i={step} th={th} />
-            </div>
-
-            {/* Progress dots + label */}
-            <div className="flex items-center gap-4 mt-10">
-              <ProgressDots total={n} active={step} />
-              <span className="font-body text-xs" style={{ color: "rgba(148,163,184,0.65)" }}>
-                {th ? "เลื่อนลงเพื่อดูต่อ" : "Scroll to advance"}
-              </span>
-            </div>
-
-            {/* Final output — fades in at end of scroll journey */}
-            <div className="mt-6">
-              <FinalOutput th={th} visible={showFinal} />
-            </div>
+          {/* Section heading */}
+          <div className="mb-8 lg:mb-10">
+            <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-4
+                             font-display font-bold text-[10px] tracking-[0.16em] uppercase"
+              style={{ background: pal.chipBg, color: pal.chipText, border: `1px solid ${pal.chipBorder}` }}>
+              Explainable · Fair · Deep Learning
+            </span>
+            <h2 id="ai-heading" className="font-display font-bold text-ink"
+              style={{ fontSize: "clamp(1.7rem, 3.2vw, 2.6rem)", letterSpacing: "-0.025em" }}>
+              {th ? "AI คิดอะไรอยู่กันแน่" : "What the AI actually does"}
+            </h2>
           </div>
 
-          {/* ── Right: 3D canvas ───────────────────────────────────────────── */}
-          <div className="relative order-1 lg:order-2" style={{ minHeight: "40svh" }}>
-            {mounted && webgl
-              ? <AiHandModel step={step} interactive={false} th={th} />
-              : mounted
-                ? <ModelFallback step={step} th={th} />
-                : <ModelSkeleton />
-            }
-            <p className="absolute bottom-3 left-0 right-0 text-center font-body"
-              style={{ fontSize: "11px", color: "rgba(148,163,184,0.4)", pointerEvents: "none" }}>
-              {th ? "เลื่อนเพื่อดูขั้นตอนถัดไป ↓" : "Scroll to advance steps ↓"}
-            </p>
+          {/* All step panes stacked in one grid cell: the container is as tall
+              as the tallest step, so the controls below never jump. aria-live
+              announces the newly visible pane after a button press. */}
+          <div aria-live="polite" className="grid">
+            {steps.map((s, i) => {
+              const active = i === step;
+              return (
+                <div key={i} aria-hidden={!active}
+                  className={`col-start-1 row-start-1 flex flex-col gap-5 ${active ? "animate-step-in" : "invisible"}`}>
+
+                  {/* Step number + model badge */}
+                  <div className="flex items-center gap-3">
+                    <span className="w-10 h-10 rounded-full grid place-items-center
+                                     font-display font-bold text-white text-[15px] shrink-0"
+                      style={{ background: "linear-gradient(135deg, rgb(var(--aurora-1)), rgb(var(--aurora-2)))",
+                               boxShadow: "0 6px 20px rgba(14,165,233,0.4)" }}>
+                      {i + 1}
+                    </span>
+                    <span className="font-mono text-[10px] px-2.5 py-1 rounded-lg"
+                      style={{ background: pal.chipBg, color: pal.chipText, border: `1px solid ${pal.chipBorder}` }}>
+                      {s.model}
+                    </span>
+                  </div>
+
+                  {/* Step title */}
+                  <h3 className="font-display font-bold text-ink"
+                    style={{ fontSize: "clamp(1.3rem, 2.4vw, 1.85rem)", letterSpacing: "-0.02em", lineHeight: 1.22 }}>
+                    {s.title}
+                  </h3>
+
+                  {/* Step body */}
+                  <p className="font-body leading-relaxed text-muted"
+                    style={{ fontSize: "clamp(0.9rem, 1.2vw, 1.0625rem)", maxWidth: "46ch" }}>
+                    {s.body}
+                  </p>
+
+                  {/* Step-specific data */}
+                  <StepData i={i} th={th} pal={pal} />
+                </div>
+              );
+            })}
           </div>
 
-          {/* Scroll progress line — thin primary-coloured strip at top */}
-          <div className="absolute top-0 left-0 h-[2px] bg-primary/80 transition-none pointer-events-none z-20"
-            style={{ width: `${progress * 100}%`, transition: "width 0.1s linear" }} />
+          {/* Controls: arrows + dots + counter */}
+          <div className="flex items-center gap-4 mt-10">
+            <div className="flex items-center gap-2">
+              <ArrowBtn dir="prev" onClick={prev} disabled={step === 0} pal={pal}
+                label={th ? "ขั้นตอนก่อนหน้า" : "Previous step"} />
+              <ArrowBtn dir="next" onClick={next} disabled={step === n - 1} pal={pal}
+                label={th ? "ขั้นตอนถัดไป" : "Next step"} />
+            </div>
+            <ProgressDots total={n} active={step} pal={pal} th={th} onSelect={setStep} />
+            <span className="font-mono text-xs tabular-nums text-muted">
+              {step + 1} / {n}
+            </span>
+          </div>
+
+          {/* Final output — only exists on the last step (keeps it out of the
+              accessibility tree and out of layout on earlier steps) */}
+          {step === n - 1 && (
+            <div className="mt-6 animate-rise">
+              <FinalOutput th={th} pal={pal} />
+            </div>
+          )}
+        </div>
+
+        {/* ── Right: 3D viewer panel (always dark — X-ray reads on dark) ───── */}
+        <div className="order-1 lg:order-2">
+          {/* Height ≈ the old full-viewport sticky panel — the hand's on-screen
+              size scales with canvas height, so keep it near 100svh on desktop. */}
+          <div className="relative rounded-[2rem] overflow-hidden min-h-[46svh] lg:min-h-[86svh]"
+            style={{ background: dark
+                       ? "linear-gradient(180deg, #05111f 0%, #071828 60%, #05111f 100%)"
+                       // light: echo the hero's brand-blue gradient so the panel
+                       // reads as intentional on the light page, not a black hole
+                       : "linear-gradient(160deg, #04293f 0%, #075985 62%, #0d5c8c 100%)",
+                     border: `1px solid ${dark ? "rgba(56,189,248,0.18)" : "rgba(14,165,233,0.40)"}`,
+                     boxShadow: dark ? "0 24px 70px rgba(2,10,20,0.55)" : "0 24px 60px rgba(7,89,133,0.30)" }}>
+
+            {/* viewer dot grid + glow */}
+            <div className="absolute inset-0 pointer-events-none opacity-[0.05]"
+              style={{ backgroundImage: "radial-gradient(circle, #38BDF8 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+            <div className="absolute -top-24 -right-24 w-[320px] h-[320px] rounded-full blur-[120px] pointer-events-none"
+              style={{ background: "#0EA5E9", opacity: 0.16 }} />
+
+            {/* absolute layer gives the R3F <Canvas> (height:100%) a definite
+                size — with only min-height on the panel it collapses. */}
+            <div className="absolute inset-0">
+              {mounted && webgl
+                ? <AiHandModel step={step} th={th} />
+                : mounted
+                  ? <ModelFallback step={step} th={th} />
+                  : <ModelSkeleton />
+              }
+            </div>
+          </div>
         </div>
       </div>
     </section>

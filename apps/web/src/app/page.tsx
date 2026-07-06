@@ -18,6 +18,10 @@ const AiHandModelHero = dynamic(
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface Session { name: string; role: string }
 
+// #who section background — the CTA wave below it must match its bottom edge,
+// so both read from this one constant.
+const WHO_BG = { dark: "#070d1a", lightTop: "#eaf2fb", lightBottom: "#f1f6fc" };
+
 // ── Hooks ──────────────────────────────────────────────────────────────────────
 /** Reveal-on-scroll: add `.reveal` to an element, it animates in when seen. */
 function useReveal(ready = true) {
@@ -120,15 +124,7 @@ export default function Home() {
       const el = document.querySelector(href);
       if (!el) return;
       e.preventDefault();
-      // For #ai, land exactly where the hand is fully visible (centred → opacity 100%).
-      const hand = href === "#ai" ? document.querySelector<HTMLElement>("[data-aihand]") : null;
-      let y: number;
-      if (hand) {
-        const hr = hand.getBoundingClientRect();
-        y = hr.top + window.scrollY + hr.height / 2 - window.innerHeight / 2;
-      } else {
-        y = el.getBoundingClientRect().top + window.scrollY - 64; // clear fixed navbar
-      }
+      const y = el.getBoundingClientRect().top + window.scrollY - 64; // clear fixed navbar
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) { window.scrollTo(0, y); return; }
       smoothScrollTo(y, 1400);
     };
@@ -334,7 +330,7 @@ export default function Home() {
           </svg>
         </section>
 
-        {/* ── AI Pipeline — scroll-driven scrollytelling ───────────────────── */}
+        {/* ── AI Pipeline — stepped walkthrough with prev/next controls ────── */}
         <AiPipeline lang={lang} />
 
         {/* ── How it works ────────────────────────────────────────────────── */}
@@ -446,7 +442,7 @@ export default function Home() {
 
         {/* ── Who it's for ────────────────────────────────────────────────── */}
         <section id="who" aria-labelledby="who-heading" className="relative min-h-[100svh] flex flex-col justify-center py-12 px-6 overflow-hidden"
-          style={{ background: dark ? "#070d1a" : "linear-gradient(180deg,#eaf2fb 0%,#f1f6fc 100%)" }}>
+          style={{ background: dark ? WHO_BG.dark : `linear-gradient(180deg,${WHO_BG.lightTop} 0%,${WHO_BG.lightBottom} 100%)` }}>
           <div className="absolute inset-0 pointer-events-none" style={{ opacity: dark ? 0.06 : 0.08,
             backgroundImage: `radial-gradient(circle, ${dark ? "#38BDF8" : "#0EA5E9"} 1px, transparent 1px)`, backgroundSize: "30px 30px" }} />
           <div className="absolute top-0 left-1/4 w-[520px] h-[520px] rounded-full blur-[140px] animate-aurora pointer-events-none"
@@ -557,9 +553,9 @@ export default function Home() {
         {/* ── CTA close ───────────────────────────────────────────────────── */}
         <section id="about" aria-labelledby="cta-heading" className="relative min-h-[100svh] flex items-center justify-center py-20 px-6 overflow-hidden"
           style={{ background: "linear-gradient(160deg, #0284C7 0%, #0EA5E9 55%, #38BDF8 100%)" }}>
-          {/* wave transition from the dark section above */}
+          {/* wave transition from the #who section above — fill tied to WHO_BG */}
           <svg className="absolute top-0 left-0 w-full" viewBox="0 0 1440 120" preserveAspectRatio="none" style={{ height: 70, zIndex: 4 }}>
-            <path d="M0 0 L1440 0 L1440 56 C1080 128, 360 -8, 0 56 Z" fill="#070d1a" />
+            <path d="M0 0 L1440 0 L1440 56 C1080 128, 360 -8, 0 56 Z" fill={dark ? WHO_BG.dark : WHO_BG.lightBottom} />
           </svg>
           {/* spotlight + vignette for depth */}
           <div className="absolute inset-0 pointer-events-none" style={{ background: "radial-gradient(120% 75% at 50% 4%, rgba(255,255,255,0.20), transparent 58%)", zIndex: 1 }} />

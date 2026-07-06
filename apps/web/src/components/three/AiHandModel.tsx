@@ -15,7 +15,7 @@
  */
 
 import * as THREE from "three";
-import { useMemo, useRef, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useTexture, Html } from "@react-three/drei";
 
@@ -367,7 +367,7 @@ function Overlays({ step, th }: { step: number; th: boolean }) {
         </>
       )}
       {step === 3 && regions.map((g, i) => (
-        <Html key={`g${i}`} position={g.p} center distanceFactor={8.5}>
+        <Html key={`g${i}`} position={g.p} center distanceFactor={8.5} zIndexRange={[20, 0]}>
           <div style={{ pointerEvents: "none", whiteSpace: "nowrap", textAlign: "center",
             background: "rgba(6,18,32,0.86)", border: `1px solid ${g.c}80`, borderRadius: 11, padding: "5px 8px 4px",
             boxShadow: `0 0 16px ${g.c}55` }}>
@@ -412,16 +412,34 @@ function Rig({ step, interactive, th }: { step: number; interactive: boolean; th
 }
 
 export default function AiHandModel({ step = 0, interactive = true, th = false, fov = 50 }: { step?: number; interactive?: boolean; th?: boolean; fov?: number }) {
+  // Pause the render loop while off-screen (same pattern as 3d/BotModel) —
+  // the landing page mounts two of these canvases at once.
+  const hostRef = useRef<HTMLDivElement>(null);
+  const [frameloop, setFrameloop] = useState<"always" | "never">("always");
+  useEffect(() => {
+    const el = hostRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      ([e]) => setFrameloop(e.isIntersecting ? "always" : "never"),
+      { rootMargin: "120px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <Canvas
-      camera={{ position: [0, 0, 10], fov }}
-      dpr={[1, 1.5]}
-      gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
-      style={{ background: "transparent" }}
-    >
-      <Suspense fallback={null}>
-        <Rig step={step} interactive={interactive} th={th} />
-      </Suspense>
-    </Canvas>
+    <div ref={hostRef} style={{ width: "100%", height: "100%" }}>
+      <Canvas
+        camera={{ position: [0, 0, 10], fov }}
+        dpr={[1, 1.5]}
+        frameloop={frameloop}
+        gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
+        style={{ background: "transparent" }}
+      >
+        <Suspense fallback={null}>
+          <Rig step={step} interactive={interactive} th={th} />
+        </Suspense>
+      </Canvas>
+    </div>
   );
 }
