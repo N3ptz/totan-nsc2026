@@ -337,7 +337,7 @@ export default function PrintReportPage() {
             onClick={() => {
               // เปิดด้วย noopener → บางเบราว์เซอร์ปิดเองไม่ได้ จึง fallback กลับเข้าแอป
               window.close();
-              setTimeout(() => { window.location.href = "/dashboard/reports"; }, 150);
+              setTimeout(() => { window.location.href = `/dashboard/patients/${childId}`; }, 150);
             }}
             style={{ padding: "8px 14px", background: "#334155", color: "#cbd5e1", border: "none", borderRadius: 8, fontSize: 13, cursor: "pointer" }}>
             ✕ ปิด / กลับ
