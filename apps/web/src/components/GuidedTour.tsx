@@ -631,8 +631,9 @@ export function TourProvider({ children }: { children: ReactNode }) {
     <TourContext.Provider value={{ start, stop, isActive, isWelcomeActive: showWelcome }}>
       {children}
 
-      {/* Mascot + Tutorial button — shared fixed container, mascot above as first sibling */}
-      {mounted && !isActive && !showWelcome && (
+      {/* Mascot + Tutorial button — shared fixed container, mascot above as first sibling
+          (ซ่อนบนหน้า login/register — ไม่มี tour ให้เล่นที่นั่น) */}
+      {mounted && !isActive && !showWelcome && !pathname.startsWith("/login") && (
         <div
           className="fixed bottom-6 right-6 z-20 flex flex-col items-center gap-0 print:hidden"
         >
