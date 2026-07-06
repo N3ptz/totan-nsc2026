@@ -165,10 +165,9 @@ export default function LoginPage() {
         {/* Logo */}
         <Link href="/" className="relative z-10 flex items-center gap-3 w-fit group">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-105 group-hover:rotate-3"
-            style={{ background: "linear-gradient(135deg,#38BDF8,#A78BFA)", boxShadow: "0 8px 24px rgba(56,189,248,0.4)" }}>
-            <svg viewBox="0 0 24 24" className="w-5 h-5 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
+            style={{ background: "rgba(255,255,255,0.92)", boxShadow: "0 8px 24px rgba(56,189,248,0.35)" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/tohtan_bgremover.png" alt="โตทัน" className="w-7 h-7 object-contain" />
           </div>
           <span className="text-white text-xl font-display font-bold tracking-tight">โตทัน</span>
           <span className="text-[10px] font-body font-bold px-2 py-0.5 rounded-full tracking-widest"
@@ -256,12 +255,8 @@ export default function LoginPage() {
             {/* Mobile logo */}
             <div className="lg:hidden mb-7 text-center">
               <Link href="/" className="inline-flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-2xl flex items-center justify-center"
-                  style={{ background: "linear-gradient(135deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))" }}>
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/tohtan_bgremover.png" alt="โตทัน" className="w-9 h-9 object-contain" />
                 <span className="font-display text-xl font-bold text-ink">โตทัน</span>
               </Link>
             </div>

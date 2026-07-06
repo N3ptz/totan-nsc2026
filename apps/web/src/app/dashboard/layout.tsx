@@ -133,17 +133,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* ── Logo ─────────────────────────────────────── */}
         <div className="flex items-center gap-3 border-b border-border/60 px-4 py-4 overflow-hidden">
           <Link href="/" data-tour="logo" className="flex items-center gap-2.5 group flex-shrink-0">
-            <div
-              className="w-9 h-9 rounded-2xl flex-shrink-0 flex items-center justify-center transition-transform group-hover:scale-105 group-hover:rotate-3"
-              style={{
-                background:  "linear-gradient(135deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))",
-                boxShadow:   "0 4px 14px rgb(var(--primary)/0.38)",
-              }}
-            >
-              <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/tohtan_bgremover.png"
+              alt="โตทัน"
+              className="w-9 h-9 object-contain flex-shrink-0 transition-transform group-hover:scale-105 group-hover:rotate-3"
+            />
             <div className={`overflow-hidden transition-all duration-300 ${collapsed ? "max-w-0 opacity-0" : "max-w-[140px] opacity-100"}`}>
               <span className="font-display font-bold text-base text-ink tracking-tight whitespace-nowrap">โตทัน</span>
               <span className="block text-[10px] font-body text-muted leading-none whitespace-nowrap">NSC 2026</span>
