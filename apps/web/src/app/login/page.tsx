@@ -8,7 +8,6 @@ import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
 import { AvatarPicker } from "@/components/AvatarPicker";
 import { MascotBot } from "@/components/MascotBot";
-import { LoginHelpModal } from "@/components/LoginHelpModal";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -30,7 +29,6 @@ export default function LoginPage() {
   const [regData, setRegData] = useState({ email: "", password: "", fullName: "", phone: "", relationship: "" });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
-  const [showHelp, setShowHelp] = useState(false);
 
   // OTP verification state
   const [verifyStep, setVerifyStep] = useState<{ email: string; password: string; avatarFile: File | null } | null>(null);
@@ -252,17 +250,7 @@ export default function LoginPage() {
 
         {/* Form area */}
         <div className="relative flex-1 flex items-center justify-center px-6 py-8">
-          <div className="relative w-full max-w-[420px] glass-strong rounded-3xl p-8 animate-fade-up">
-
-            {/* Help — คู่มือการใช้งาน */}
-            <button
-              onClick={() => setShowHelp(true)}
-              aria-label={lang === "th" ? "คู่มือการใช้งาน" : "How to use"}
-              title={lang === "th" ? "คู่มือการใช้งาน" : "How to use"}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full border border-border text-muted hover:text-primary hover:border-primary/50 flex items-center justify-center text-sm font-bold transition-all"
-            >
-              ?
-            </button>
+          <div className="w-full max-w-[420px] glass-strong rounded-3xl p-8 animate-fade-up">
 
             {/* Mobile logo */}
             <div className="lg:hidden mb-7 text-center">
@@ -542,8 +530,6 @@ export default function LoginPage() {
           <p className="text-[11px] font-body text-muted/60">© 2026 โตทัน · Mahidol University</p>
         </div>
       </div>
-
-      {showHelp && <LoginHelpModal th={lang === "th"} onClose={() => setShowHelp(false)} />}
 
     </div>
   );
