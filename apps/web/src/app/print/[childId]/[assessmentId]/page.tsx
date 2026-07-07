@@ -314,10 +314,9 @@ export default function PrintReportPage() {
       {/* ── Screen toolbar (hidden when printing) ── */}
       <div className="np" style={{ position: "fixed", inset: "0 0 auto", zIndex: 999, background: "#0f172a", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#38bdf8,#a78bfa)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg viewBox="0 0 24 24" style={{ width: 16, height: 16 }} fill="none" stroke="white" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/tohtan_bgremover.png" alt="โตทัน" style={{ width: 26, height: 26, objectFit: "contain" }} />
           </div>
           <div>
             <span style={{ color: "white", fontSize: 13, fontWeight: 700 }}>รายงานพร้อมพิมพ์</span>
