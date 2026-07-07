@@ -352,10 +352,10 @@ export default function PrintReportPage() {
         {/* ── Header bar ── */}
         <div className="sec keep-with-next" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 11, borderBottom: "2.5px solid #1e3a5f", marginBottom: 13 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 11, background: "linear-gradient(135deg,#2563eb,#7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 4px 12px rgba(37,99,235,.35)" }}>
-              <svg viewBox="0 0 24 24" style={{ width: 20, height: 20 }} fill="none" stroke="white" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
+            {/* โลโก้จริงของเว็บ (ตัวเดียวกับ LogoMark) — พื้นขาว+เส้นขอบบางให้เข้ากับงานพิมพ์ */}
+            <div style={{ width: 42, height: 42, borderRadius: 11, background: "#ffffff", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/tohtan_bgremover.png" alt="โตทัน" style={{ width: 34, height: 34, objectFit: "contain" }} />
             </div>
             <div>
               <div style={{ fontSize: 17, fontWeight: 700, color: "#1e3a5f", letterSpacing: "-0.3px" }}>โตทัน · Totan</div>
