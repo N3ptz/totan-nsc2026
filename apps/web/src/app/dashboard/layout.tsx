@@ -33,6 +33,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Close mobile drawer on navigation
   useEffect(() => { setMobileOpen(false); }, [pathname]);
 
+  // Lock page scroll while the mobile drawer is open — otherwise the content
+  // behind the backdrop keeps scrolling when you drag/​wheel over it.
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [mobileOpen]);
+
   const toggleCollapse = () => {
     setCollapsed(prev => {
       const next = !prev;
@@ -101,7 +110,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile backdrop */}
       {mobileOpen && (
         <div
-          className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]"
+          className="lg:hidden fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] overscroll-contain"
+          style={{ touchAction: "none" }}
           onClick={() => setMobileOpen(false)}
         />
       )}
