@@ -17,6 +17,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useTheme } from "@/lib/theme";
+import { ContinentMap } from "./ContinentMap";
 
 // ── 3D model (WebGL only) ────────────────────────────────────────────────────
 const AiHandModel = dynamic(() => import("./three/AiHandModel"), {
@@ -40,13 +41,42 @@ function hasWebGL(): boolean {
   } catch { return false; }
 }
 
-// ── 2D fallback when WebGL is unavailable ────────────────────────────────────
+// ── 2D fallback when WebGL is unavailable (and on phones/tablets) ────────────
+// Mirrors what the 3D model shows per step, so no step reads as "nothing
+// happened" on mobile: scan sweep → ROI boxes → bone-age HUD → fairness
+// badges → Grad-CAM heat.
 const ROIS = [
-  { l: "20%", t: "8%",  w: "62%", h: "42%", c: "#38BDF8" },
-  { l: "16%", t: "48%", w: "60%", h: "26%", c: "#34D399" },
-  { l: "30%", t: "74%", w: "40%", h: "22%", c: "#FB923C" },
+  { l: "20%", t: "8%",  w: "62%", h: "42%", c: "#38BDF8", label: "Phalanges" },
+  { l: "16%", t: "48%", w: "60%", h: "26%", c: "#34D399", label: "Carpals" },
+  { l: "30%", t: "74%", w: "40%", h: "22%", c: "#FB923C", label: "Radius/Ulna" },
 ];
 const GRADCAM = "radial-gradient(circle at 40% 28%, rgba(255,64,32,0.92), transparent 22%), radial-gradient(circle at 58% 22%, rgba(255,150,40,0.88), transparent 18%), radial-gradient(circle at 46% 58%, rgba(255,90,40,0.8), transparent 26%)";
+
+// pulsing dots over the growth-plate joints (same image crop as HeroHand)
+const FB_LANDMARKS = [
+  { x: "30%", y: "35%", c: "#FB8E5E" }, { x: "42%", y: "29%", c: "#FB8E5E" },
+  { x: "54%", y: "28%", c: "#FB8E5E" }, { x: "65%", y: "31%", c: "#FB8E5E" },
+  { x: "37%", y: "22%", c: "#67E8F9" }, { x: "49%", y: "18%", c: "#67E8F9" },
+  { x: "60%", y: "18%", c: "#67E8F9" }, { x: "44%", y: "60%", c: "#67E8F9" },
+];
+
+// fairness badges pinned to the panel corners (values match the 3D overlays)
+const FB_REGIONS = [
+  { k: "asia",     pos: "top-[4%] left-[3%]",     c: "#38BDF8", v: "6.5", th: "เอเชีย",     en: "Asia" },
+  { k: "europe",   pos: "top-[4%] right-[3%]",    c: "#34D399", v: "6.6", th: "ยุโรป",      en: "Europe" },
+  { k: "africa",   pos: "bottom-[5%] left-[3%]",  c: "#FB923C", v: "6.4", th: "แอฟริกา",   en: "Africa" },
+  { k: "samerica", pos: "bottom-[5%] right-[3%]", c: "#A78BFA", v: "6.5", th: "อเมริกาใต้", en: "S. America" },
+];
+
+/** Always-mounted overlay layer that crossfades with the active step. */
+function FbLayer({ show, children }: { show: boolean; children: React.ReactNode }) {
+  return (
+    <div aria-hidden={!show} className="absolute inset-0 pointer-events-none transition-opacity duration-500 ease-out"
+      style={{ opacity: show ? 1 : 0 }}>
+      {children}
+    </div>
+  );
+}
 
 function ModelFallback({ step, th }: { step: number; th: boolean }) {
   return (
@@ -54,13 +84,79 @@ function ModelFallback({ step, th }: { step: number; th: boolean }) {
       <img src="/Hand-nobg.png" alt={th ? "ภาพถ่ายรังสีมือ" : "Hand X-ray"}
         className="absolute inset-0 w-full h-full object-contain"
         style={{ filter: "sepia(0.5) hue-rotate(160deg) saturate(2.4) brightness(1.12) drop-shadow(0 0 18px rgba(56,189,248,0.4))" }} />
-      {step === 4 && (
+
+      {/* step 0 — DeepLabV3 segmentation: sweeping scan band */}
+      <FbLayer show={step === 0}>
+        <div className="absolute left-[8%] right-[8%] h-12"
+          style={{ background: "linear-gradient(rgba(103,232,249,0.5), transparent)",
+                   borderTop: "1px solid rgba(103,232,249,0.9)",
+                   boxShadow: "0 0 24px rgba(56,189,248,0.45)",
+                   animation: "scan-line 3.6s ease-in-out infinite" }} />
+      </FbLayer>
+
+      {/* step 1 — YOLO ROI boxes with labels */}
+      <FbLayer show={step === 1}>
+        {ROIS.map((b) => (
+          <div key={b.label} className="absolute rounded"
+            style={{ left: b.l, top: b.t, width: b.w, height: b.h, border: `1.5px dashed ${b.c}`, boxShadow: `0 0 12px ${b.c}55` }}>
+            <span className="absolute -top-2.5 left-2 font-mono text-[9px] px-1.5 py-0.5 rounded"
+              style={{ background: "rgba(2,11,22,0.85)", color: b.c, border: `1px solid ${b.c}66` }}>
+              {b.label}
+            </span>
+          </div>
+        ))}
+      </FbLayer>
+
+      {/* step 2 — joint landmarks + bone-age HUD (mirrors the 3D output panel) */}
+      <FbLayer show={step === 2}>
+        {FB_LANDMARKS.map((p, i) => (
+          <span key={i} className="absolute flex h-2 w-2 -translate-x-1/2 -translate-y-1/2" style={{ left: p.x, top: p.y }}>
+            <span className="absolute inline-flex h-full w-full rounded-full opacity-60 animate-ping"
+              style={{ background: p.c, animationDelay: `${i * 0.25}s` }} />
+            <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: p.c, boxShadow: `0 0 8px ${p.c}` }} />
+          </span>
+        ))}
+        <div className="absolute top-[3%] right-[3%] font-mono rounded-sm"
+          style={{ background: "linear-gradient(180deg, rgba(3,15,30,0.95), rgba(2,10,20,0.93))",
+                   border: "1px solid rgba(103,232,249,0.55)", boxShadow: "0 0 18px rgba(56,189,248,0.45)",
+                   padding: "7px 12px 8px" }}>
+          <p className="text-[8px] tracking-[0.18em] font-bold" style={{ color: "rgba(125,211,252,0.85)" }}>BONE AGE · CONVNEXT</p>
+          <p className="text-white font-bold leading-none mt-1" style={{ fontSize: 20, textShadow: "0 0 9px rgba(56,189,248,0.9)" }}>
+            100<span className="text-[10px]" style={{ color: "#7dd3fc" }}> mo</span>
+            <span className="text-[10px] font-normal" style={{ color: "rgba(148,163,184,0.9)" }}> · 8y 4m</span>
+          </p>
+          <div className="flex items-center gap-1.5 mt-1.5">
+            <span className="text-[8px]" style={{ color: "rgba(148,163,184,0.9)" }}>CONF</span>
+            <span className="block h-[3px] w-14 rounded overflow-hidden" style={{ background: "rgba(56,189,248,0.18)" }}>
+              <span className="block h-full" style={{ width: "96%", background: "linear-gradient(90deg,#22D3EE,#34D399)" }} />
+            </span>
+            <span className="text-[9px] font-bold" style={{ color: "#6ee7b7" }}>96%</span>
+          </div>
+        </div>
+      </FbLayer>
+
+      {/* step 3 — fairness: continent badges in the panel corners */}
+      <FbLayer show={step === 3}>
+        {FB_REGIONS.map((g) => (
+          <div key={g.k} className={`absolute ${g.pos} text-center rounded-xl px-2.5 pt-1.5 pb-1`}
+            style={{ background: "rgba(6,18,32,0.86)", border: `1px solid ${g.c}80`, boxShadow: `0 0 16px ${g.c}45` }}>
+            <ContinentMap k={g.k} c={g.c} size={38} />
+            <p className="font-display font-bold text-white text-[10px] mt-0.5">{th ? g.th : g.en}</p>
+            <p className="font-mono text-[9px] font-bold" style={{ color: g.c }}>
+              {g.v} mo <span style={{ color: "#6ee7b7" }}>✓</span>
+            </p>
+          </div>
+        ))}
+      </FbLayer>
+
+      {/* step 4 — Grad-CAM heatmap */}
+      <FbLayer show={step === 4}>
         <div className="absolute inset-0 animate-glow" style={{ mixBlendMode: "screen", opacity: 0.78, background: GRADCAM }} />
-      )}
-      {step === 1 && ROIS.map((b, i) => (
-        <div key={i} className="absolute rounded"
-          style={{ left: b.l, top: b.t, width: b.w, height: b.h, border: `1.5px dashed ${b.c}`, boxShadow: `0 0 12px ${b.c}55` }} />
-      ))}
+        <span className="absolute top-[3%] right-[3%] font-mono text-[9px] px-2 py-1 rounded"
+          style={{ background: "rgba(2,11,22,0.85)", color: "#FDBA74", border: "1px solid rgba(251,146,60,0.5)" }}>
+          Grad-CAM
+        </span>
+      </FbLayer>
     </div>
   );
 }
@@ -281,9 +377,14 @@ export default function AiPipeline({ lang }: { lang: string }) {
   useEffect(() => {
     setMounted(true);
     // Only render the WebGL hand on large screens; mobile uses the 2D fallback,
-    // avoiding a second WebGL context below the fold.
-    const big = window.matchMedia("(min-width: 1024px)").matches;
-    setWebgl(hasWebGL() && big);
+    // avoiding a second WebGL context below the fold. Track the media query
+    // live so zoom/resize across the breakpoint swaps the visual too.
+    const ok = hasWebGL();
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const decide = () => setWebgl(ok && mq.matches);
+    decide();
+    mq.addEventListener("change", decide);
+    return () => mq.removeEventListener("change", decide);
   }, []);
 
   const prev = () => setStep((s) => Math.max(0, s - 1));

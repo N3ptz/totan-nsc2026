@@ -49,7 +49,10 @@ export default function HeroHand({ lang }: { lang: string }) {
   }, [mounted]);
 
   return (
-    <div ref={ref} className="relative w-full mx-auto" style={{ maxWidth: 460, aspectRatio: "5 / 6", willChange: "transform, opacity" }}>
+    <div ref={ref} className="relative w-full mx-auto"
+      style={{ maxWidth: 460, aspectRatio: "5 / 6", willChange: "transform, opacity",
+               // scroll updates land per-frame; the transition eases between them
+               transition: "transform 0.45s cubic-bezier(0.22,1,0.36,1), opacity 0.45s cubic-bezier(0.22,1,0.36,1)" }}>
       {/* platform + halo glow */}
       <div className="absolute left-1/2 -translate-x-1/2 bottom-[8%] w-[78%] h-[24%] rounded-[50%] blur-3xl pointer-events-none"
         style={{ background: "radial-gradient(ellipse, rgba(56,189,248,0.45), transparent 70%)" }} />

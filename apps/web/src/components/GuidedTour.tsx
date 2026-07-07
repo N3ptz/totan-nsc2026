@@ -637,10 +637,11 @@ export function TourProvider({ children }: { children: ReactNode }) {
         <div
           className="fixed bottom-6 right-6 z-20 flex flex-col items-center gap-0 print:hidden"
         >
+          {/* จอเล็ก: ซ่อนมาสคอต — ตัวมันกว้างพอจะทับเนื้อหากลางจอ เหลือแค่ปุ่มคู่มือ */}
           <HippoMascot
             size="sm"
             message={lang === "th" ? "สวัสดีครับ! พร้อมช่วยติดตามการเติบโต" : "Hi! Ready to track growth"}
-            className="mb-4"
+            className="mb-4 hidden md:block"
           />
           <TourButton />
         </div>
