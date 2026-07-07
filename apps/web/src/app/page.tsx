@@ -99,14 +99,20 @@ export default function Home() {
 
   useEffect(() => {
     if (!mounted) return;
+    let ok = false;
     try {
       const c = document.createElement("canvas");
-      const ok = !!(window.WebGLRenderingContext && (c.getContext("webgl") || c.getContext("experimental-webgl")));
-      // Only spin up the heavy R3F shader hand on large screens; the polished 2D
-      // HeroHand fallback keeps mobile from allocating an extra WebGL context.
-      const big = window.matchMedia("(min-width: 1024px)").matches;
-      setHeroWebgl(ok && big);
-    } catch { setHeroWebgl(false); }
+      ok = !!(window.WebGLRenderingContext && (c.getContext("webgl") || c.getContext("experimental-webgl")));
+    } catch { ok = false; }
+    // Only spin up the heavy R3F shader hand on large screens; the polished 2D
+    // HeroHand fallback keeps mobile from allocating an extra WebGL context.
+    // Follow the media query live — browser zoom moves the effective viewport
+    // across the lg: breakpoint, and the mounted visual must switch with it.
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const decide = () => setHeroWebgl(ok && mq.matches);
+    decide();
+    mq.addEventListener("change", decide);
+    return () => mq.removeEventListener("change", decide);
   }, [mounted]);
 
   useEffect(() => {

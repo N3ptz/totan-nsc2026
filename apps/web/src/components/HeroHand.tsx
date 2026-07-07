@@ -32,9 +32,14 @@ export default function HeroHand({ lang }: { lang: string }) {
     const update = () => {
       const r = el.getBoundingClientRect();
       const vh = window.innerHeight || 1;
-      const k = Math.min(1, Math.abs((r.top + r.height / 2) - vh / 2) / vh);
+      // Dead zone: stay full-size while the hand sits anywhere near the middle
+      // of the viewport; only shrink/fade as it actually scrolls out. On
+      // narrow viewports (mobile / zoomed-in) the stacked layout loads with
+      // the hand below the copy, so raw distance-from-centre would hide it.
+      const off = Math.abs((r.top + r.height / 2) - vh / 2);
+      const k = Math.min(1, Math.max(0, off - vh * 0.3) / (vh * 0.7));
       el.style.transform = `scale(${1 - 0.45 * k})`;
-      el.style.opacity = `${Math.max(0, 1 - 1.2 * k)}`;
+      el.style.opacity = `${1 - k}`;
     };
     const onScroll = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(update); };
     window.addEventListener("scroll", onScroll, { passive: true });
