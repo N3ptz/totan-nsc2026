@@ -149,18 +149,28 @@ export default function Home() {
     } catch {}
   }, []);
 
-  // Mouse parallax on hero glow layers
+  // Mouse parallax on hero glow layers — coalesced to one style write per
+  // frame (high-Hz mice fire mousemove at 125–1000Hz; each write recalcs
+  // style for the whole hero subtree).
   useEffect(() => {
     const el = heroRef.current; if (!el) return;
+    let raf = 0;
+    let ev: MouseEvent | null = null;
     const onMove = (e: MouseEvent) => {
-      const r = el.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width - 0.5;
-      const y = (e.clientY - r.top) / r.height - 0.5;
-      el.style.setProperty("--mx", `${x * 26}px`);
-      el.style.setProperty("--my", `${y * 26}px`);
+      ev = e;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        if (!ev) return;
+        const r = el.getBoundingClientRect();
+        const x = (ev.clientX - r.left) / r.width - 0.5;
+        const y = (ev.clientY - r.top) / r.height - 0.5;
+        el.style.setProperty("--mx", `${x * 26}px`);
+        el.style.setProperty("--my", `${y * 26}px`);
+      });
     };
-    el.addEventListener("mousemove", onMove);
-    return () => el.removeEventListener("mousemove", onMove);
+    el.addEventListener("mousemove", onMove, { passive: true });
+    return () => { el.removeEventListener("mousemove", onMove); cancelAnimationFrame(raf); };
   }, []);
 
   const th = lang === "th";
@@ -644,13 +654,16 @@ function AuroraField({ subtle = false }: { subtle?: boolean }) {
       {/* Dot grid */}
       <div className="absolute inset-0 opacity-[0.07]"
         style={{ backgroundImage: "radial-gradient(circle, white 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
-      {/* Blobs */}
-      <div className="absolute top-[8%] left-[12%] w-[42vw] h-[42vw] max-w-[560px] max-h-[560px] blur-[90px] animate-blob animate-aurora"
-        style={{ background: "radial-gradient(circle, rgba(56,189,248,0.9), transparent 65%)", opacity: o }} />
-      <div className="absolute top-[20%] right-[6%] w-[40vw] h-[40vw] max-w-[520px] max-h-[520px] blur-[100px] animate-blob animate-aurora-slow"
-        style={{ background: "radial-gradient(circle, rgba(167,139,250,0.85), transparent 65%)", opacity: o, animationDelay: "-6s" }} />
-      <div className="absolute bottom-[2%] left-[28%] w-[38vw] h-[38vw] max-w-[480px] max-h-[480px] blur-[110px] animate-blob animate-aurora"
-        style={{ background: "radial-gradient(circle, rgba(234,108,73,0.8), transparent 65%)", opacity: o * 0.9, animationDelay: "-12s" }} />
+      {/* Blobs — transform-only drift (animate-aurora). The border-radius morph
+          (animate-blob) is intentionally omitted: under a 90–110px blur it is
+          invisible, yet it forces a full-layer repaint every frame and drops the
+          whole element off the GPU compositor fast-path. */}
+      <div className="absolute top-[8%] left-[12%] w-[42vw] h-[42vw] max-w-[560px] max-h-[560px] blur-[90px] animate-aurora"
+        style={{ background: "radial-gradient(circle, rgba(56,189,248,0.9), transparent 65%)", opacity: o, willChange: "transform" }} />
+      <div className="absolute top-[20%] right-[6%] w-[40vw] h-[40vw] max-w-[520px] max-h-[520px] blur-[100px] animate-aurora-slow"
+        style={{ background: "radial-gradient(circle, rgba(167,139,250,0.85), transparent 65%)", opacity: o, animationDelay: "-6s", willChange: "transform" }} />
+      <div className="absolute bottom-[2%] left-[28%] w-[38vw] h-[38vw] max-w-[480px] max-h-[480px] blur-[110px] animate-aurora"
+        style={{ background: "radial-gradient(circle, rgba(234,108,73,0.8), transparent 65%)", opacity: o * 0.9, animationDelay: "-12s", willChange: "transform" }} />
     </div>
   );
 }
@@ -816,7 +829,9 @@ function StepScene({ i, th, tint }: { i: number; th: boolean; tint: string }) {
             <div><Label>{th ? "ภาพ X-ray" : "X-ray Image"}</Label>
               <div className="rounded-lg overflow-hidden grid place-items-center relative" style={{ background: "rgb(0 0 0 / 0.85)", border: "1px solid rgb(var(--border)/0.4)", height: 58 }}>
                 <img src="/Hand-nobg.png" alt="" className="h-12" style={{ filter: "brightness(1.18)" }} />
-                <span className="absolute left-2 right-2 h-[2px] animate-hf-scan rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgb(${tint}), transparent)`, boxShadow: `0 0 10px rgb(${tint})` }} />
+                <span className="absolute inset-0 animate-hf-scan pointer-events-none">
+                  <span className="absolute left-2 right-2 top-0 h-[2px] rounded-full" style={{ background: `linear-gradient(90deg, transparent, rgb(${tint}), transparent)`, boxShadow: `0 0 10px rgb(${tint})` }} />
+                </span>
               </div>
             </div>
             <div><Label>Heatmap (Grad-CAM)</Label>
@@ -888,7 +903,9 @@ function DoctorPreview({ th }: { th: boolean }) {
         <div className="rounded-lg overflow-hidden relative grid place-items-center shrink-0" style={{ width: 52, height: 52, background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
           <img src="/Hand-nobg.png" alt="" style={{ height: 44, filter: "brightness(1.2)" }} />
           {/* AI scan sweep */}
-          <span className="absolute left-1.5 right-1.5 h-[2px] rounded-full animate-hf-scan" style={{ background: "linear-gradient(90deg, transparent, #38BDF8, transparent)", boxShadow: "0 0 8px #38BDF8" }} />
+          <span className="absolute inset-0 animate-hf-scan pointer-events-none">
+            <span className="absolute left-1.5 right-1.5 top-0 h-[2px] rounded-full" style={{ background: "linear-gradient(90deg, transparent, #38BDF8, transparent)", boxShadow: "0 0 8px #38BDF8" }} />
+          </span>
         </div>
         <div className="rounded-lg overflow-hidden relative grid place-items-center shrink-0" style={{ width: 52, height: 52, background: "#000", border: "1px solid rgba(255,255,255,0.08)" }}>
           <img src="/Hand-nobg.png" alt="" style={{ height: 44, filter: "brightness(1.2)" }} />

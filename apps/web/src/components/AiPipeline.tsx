@@ -85,13 +85,16 @@ function ModelFallback({ step, th }: { step: number; th: boolean }) {
         className="absolute inset-0 w-full h-full object-contain"
         style={{ filter: "sepia(0.5) hue-rotate(160deg) saturate(2.4) brightness(1.12) drop-shadow(0 0 18px rgba(56,189,248,0.4))" }} />
 
-      {/* step 0 — DeepLabV3 segmentation: sweeping scan band */}
+      {/* step 0 — DeepLabV3 segmentation: sweeping scan band (full-height
+          mover translated by its own height = transform-only, GPU) */}
       <FbLayer show={step === 0}>
-        <div className="absolute left-[8%] right-[8%] h-12"
-          style={{ background: "linear-gradient(rgba(103,232,249,0.5), transparent)",
-                   borderTop: "1px solid rgba(103,232,249,0.9)",
-                   boxShadow: "0 0 24px rgba(56,189,248,0.45)",
-                   animation: "scan-line 3.6s ease-in-out infinite" }} />
+        <div className="absolute inset-0"
+          style={{ animation: "scan-sweep 3.6s ease-in-out infinite", willChange: "transform" }}>
+          <div className="absolute left-[8%] right-[8%] top-0 h-12"
+            style={{ background: "linear-gradient(rgba(103,232,249,0.5), transparent)",
+                     borderTop: "1px solid rgba(103,232,249,0.9)",
+                     boxShadow: "0 0 24px rgba(56,189,248,0.45)" }} />
+        </div>
       </FbLayer>
 
       {/* step 1 — YOLO ROI boxes with labels */}

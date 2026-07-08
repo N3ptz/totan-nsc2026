@@ -50,9 +50,9 @@ export default function HeroHand({ lang }: { lang: string }) {
 
   return (
     <div ref={ref} className="relative w-full mx-auto"
-      style={{ maxWidth: 460, aspectRatio: "5 / 6", willChange: "transform, opacity",
-               // scroll updates land per-frame; the transition eases between them
-               transition: "transform 0.45s cubic-bezier(0.22,1,0.36,1), opacity 0.45s cubic-bezier(0.22,1,0.36,1)" }}>
+      // no CSS transition here: values land per-frame from the rAF scroll
+      // handler, and a transition fighting per-frame writes reads as lag
+      style={{ maxWidth: 460, aspectRatio: "5 / 6", willChange: "transform, opacity" }}>
       {/* platform + halo glow */}
       <div className="absolute left-1/2 -translate-x-1/2 bottom-[8%] w-[78%] h-[24%] rounded-[50%] blur-3xl pointer-events-none"
         style={{ background: "radial-gradient(ellipse, rgba(56,189,248,0.45), transparent 70%)" }} />
@@ -65,10 +65,14 @@ export default function HeroHand({ lang }: { lang: string }) {
           className="absolute inset-0 w-full h-full object-contain"
           style={{ filter: "sepia(0.5) hue-rotate(160deg) saturate(2.4) brightness(1.12) drop-shadow(0 0 22px rgba(56,189,248,0.4))" }} />
 
-        {/* sweeping scan line */}
+        {/* sweeping scan line — full-height mover translated by its own height
+            (transform-only, GPU); the visible line sits at the mover's top */}
         {mounted && (
-          <div className="absolute left-[12%] right-[12%] h-10 pointer-events-none"
-            style={{ background: "linear-gradient(rgba(103,232,249,0.55), transparent)", animation: "scan-line 4s ease-in-out infinite", borderTop: "1px solid rgba(103,232,249,0.8)" }} />
+          <div className="absolute inset-0 pointer-events-none"
+            style={{ animation: "scan-sweep 4s ease-in-out infinite", willChange: "transform" }}>
+            <div className="absolute left-[12%] right-[12%] top-0 h-10"
+              style={{ background: "linear-gradient(rgba(103,232,249,0.55), transparent)", borderTop: "1px solid rgba(103,232,249,0.8)" }} />
+          </div>
         )}
 
         {/* growth-plate landmark dots */}
@@ -97,8 +101,10 @@ function Callout({ className = "", tone, title, value, delay = "0s", live = fals
   }[tone];
   return (
     <div className={`absolute ${className} animate-fade-up pointer-events-none select-none`} style={{ animationDelay: delay, animationFillMode: "both" }}>
+      {/* solid bg instead of backdrop-filter: the floating hand behind these
+          would force a backdrop re-blur every frame on mobile GPUs */}
       <div className="flex items-center gap-2.5 pl-2.5 pr-3.5 py-2 rounded-2xl"
-        style={{ background: "rgba(8,20,34,0.62)", border: `1px solid ${c.ring}`, backdropFilter: "blur(12px)", boxShadow: "0 8px 28px rgba(2,12,24,0.4)" }}>
+        style={{ background: "rgba(8,20,34,0.85)", border: `1px solid ${c.ring}`, boxShadow: "0 8px 28px rgba(2,12,24,0.4)" }}>
         <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
           {live && <span className="absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping" style={{ background: c.dot }} />}
           <span className="relative inline-flex rounded-full h-2.5 w-2.5" style={{ background: c.dot }} />

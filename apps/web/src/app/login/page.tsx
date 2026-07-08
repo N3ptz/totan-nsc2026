@@ -138,13 +138,15 @@ export default function LoginPage() {
         <div className="absolute inset-0 opacity-[0.06]"
           style={{ backgroundImage: "radial-gradient(circle, #38BDF8 1px, transparent 1px)", backgroundSize: "30px 30px" }} />
 
-        {/* Aurora blobs — kept subtle so the copy reads cleanly */}
-        <div className="absolute top-[6%] right-[-6%] w-[520px] h-[520px] rounded-full blur-[110px] opacity-[0.20] animate-blob animate-aurora pointer-events-none"
-          style={{ background: "radial-gradient(circle, #38BDF8, transparent 65%)" }} />
-        <div className="absolute bottom-[2%] left-[-8%] w-[440px] h-[440px] rounded-full blur-[110px] opacity-[0.16] animate-blob animate-aurora-slow pointer-events-none"
-          style={{ background: "radial-gradient(circle, #A78BFA, transparent 65%)", animationDelay: "-7s" }} />
-        <div className="absolute top-[44%] left-[30%] w-[360px] h-[360px] rounded-full blur-[120px] opacity-[0.12] animate-blob animate-aurora pointer-events-none"
-          style={{ background: "radial-gradient(circle, #0EA5E9, transparent 65%)", animationDelay: "-13s" }} />
+        {/* Aurora blobs — kept subtle so the copy reads cleanly. Transform-only
+            drift (animate-aurora); the border-radius morph is dropped — invisible
+            under a 110px blur but it repaints the whole layer every frame. */}
+        <div className="absolute top-[6%] right-[-6%] w-[520px] h-[520px] rounded-full blur-[110px] opacity-[0.20] animate-aurora pointer-events-none"
+          style={{ background: "radial-gradient(circle, #38BDF8, transparent 65%)", willChange: "transform" }} />
+        <div className="absolute bottom-[2%] left-[-8%] w-[440px] h-[440px] rounded-full blur-[110px] opacity-[0.16] animate-aurora-slow pointer-events-none"
+          style={{ background: "radial-gradient(circle, #A78BFA, transparent 65%)", animationDelay: "-7s", willChange: "transform" }} />
+        <div className="absolute top-[44%] left-[30%] w-[360px] h-[360px] rounded-full blur-[120px] opacity-[0.12] animate-aurora pointer-events-none"
+          style={{ background: "radial-gradient(circle, #0EA5E9, transparent 65%)", animationDelay: "-13s", willChange: "transform" }} />
 
         {/* X-ray hand — single layer with scan-line */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none animate-float-soft"
@@ -153,12 +155,16 @@ export default function LoginPage() {
             <img src="/Hand-nobg.png" alt="" aria-hidden
               className="w-full object-contain select-none"
               style={{ filter: "brightness(0) invert(1) sepia(1) hue-rotate(170deg) saturate(2.5) brightness(1.2)", transform: "rotate(-5deg)" }} />
-            <div className="absolute inset-x-0 h-8 pointer-events-none"
-              style={{
-                background: "linear-gradient(to bottom, rgba(103,232,249,0.0), rgba(103,232,249,0.18), rgba(103,232,249,0.0))",
-                borderTop: "1px solid rgba(103,232,249,0.45)",
-                animation: "scan-line 4s ease-in-out infinite",
-              }} />
+            {/* transform-only sweep: full-height mover, line at its top edge */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute inset-0" style={{ animation: "scan-sweep 4s ease-in-out infinite", willChange: "transform" }}>
+                <div className="absolute inset-x-0 top-0 h-8"
+                  style={{
+                    background: "linear-gradient(to bottom, rgba(103,232,249,0.0), rgba(103,232,249,0.18), rgba(103,232,249,0.0))",
+                    borderTop: "1px solid rgba(103,232,249,0.45)",
+                  }} />
+              </div>
+            </div>
           </div>
         </div>
 
