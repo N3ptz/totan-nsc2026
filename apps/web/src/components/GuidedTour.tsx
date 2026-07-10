@@ -6,8 +6,15 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
+import dynamic from "next/dynamic";
 import { useI18n, Lang } from "@/lib/i18n";
-import { HippoMascot } from "@/components/3d/BotModel";
+
+// มาสคอต 3D ลาก three.js (~670KB) + โมเดล 1.8MB มาด้วย — dynamic import เพื่อไม่ให้
+// chunk นี้ติดไปกับ root layout (เดิมทุกหน้ารวม login/print ต้องโหลดทั้งก้อน)
+const HippoMascot = dynamic(
+  () => import("@/components/3d/BotModel").then((m) => m.HippoMascot),
+  { ssr: false },
+);
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface TourStep {
@@ -31,7 +38,7 @@ interface TourCtx {
 const UI: Record<Lang, {
   prev: string; skip: string; next: string; done: string; btn: string; aria: string;
   welcomeEyebrow: string; welcomeTitle: string; welcomeBody: string;
-  welcomeSteps: string; welcomeStart: string; welcomeSkip: string; welcomeHint: string;
+  welcomeSteps: (n: number) => string; welcomeStart: string; welcomeSkip: string; welcomeHint: string;
 }> = {
   th: {
     prev: "← ก่อนหน้า", skip: "ข้าม", next: "ถัดไป →", done: "เสร็จสิ้น ✓",
@@ -39,7 +46,7 @@ const UI: Record<Lang, {
     welcomeEyebrow: "เริ่มต้นใช้งาน",
     welcomeTitle:   "ยินดีต้อนรับสู่ โตทัน 👋",
     welcomeBody:    "มาทำความรู้จักกับระบบในเวลาเพียง 1 นาที ทัวร์แบบ interactive จะนำคุณผ่านฟีเจอร์หลักของ Dashboard",
-    welcomeSteps:   "5 ขั้นตอน · ประมาณ 1 นาที",
+    welcomeSteps:   (n) => `${n} ขั้นตอน · ประมาณ 1 นาที`,
     welcomeStart:   "เริ่มทัวร์ →",
     welcomeSkip:    "ข้ามไปก่อน",
     welcomeHint:    "กด Enter เพื่อเริ่ม · Esc เพื่อข้าม",
@@ -50,7 +57,7 @@ const UI: Record<Lang, {
     welcomeEyebrow: "Getting Started",
     welcomeTitle:   "Welcome to โตทัน 👋",
     welcomeBody:    "Get familiar with the system in just 1 minute. An interactive tour will walk you through the key features of your Dashboard.",
-    welcomeSteps:   "5 steps · ~1 minute",
+    welcomeSteps:   (n) => `${n} steps · ~1 minute`,
     welcomeStart:   "Start Tour →",
     welcomeSkip:    "Skip for now",
     welcomeHint:    "Press Enter to start · Esc to skip",
@@ -128,23 +135,143 @@ const DASHBOARD_SHARED_STEPS: TourStep[] = [
   },
 ];
 
-// Doctor / Parent overview page only (/dashboard)
-const DOCTOR_PARENT_STEPS: TourStep[] = [
+// Doctor overview page only (/dashboard)
+const DOCTOR_STEPS: TourStep[] = [
   {
     selector: "[data-tour='stats']",
-    title: { th: "ภาพรวมกิจกรรม", en: "Activity Overview" },
+    title: { th: "ภาพรวมกิจกรรมของคุณหมอ", en: "Your Activity Overview" },
     body: {
-      th: "สถิติแบบ real-time: จำนวนผู้ป่วย, การประเมินวันนี้, รายการรอดำเนินการ และคำแนะนำล่าสุด",
-      en: "Real-time stats: total patients, today's assessments, pending items, and latest recommendations.",
+      th: "สถิติแบบ real-time: จำนวนผู้ป่วยในการดูแล, การประเมินวันนี้, เคสที่รอผล AI และคำแนะนำที่ส่งให้ผู้ปกครองแล้ว",
+      en: "Real-time stats: patients under your care, today's assessments, cases awaiting AI, and recommendations sent to parents.",
     },
     placement: "top",
   },
   {
     selector: "[data-tour='patient-list']",
-    title: { th: "รายชื่อผู้ป่วย / บุตรหลาน", en: "Patient / Children List" },
+    title: { th: "รายชื่อผู้ป่วย — เปิดแฟ้มเคสที่นี่", en: "Patient List — Open a Case" },
     body: {
-      th: "คลิกชื่อเพื่อดูประวัติ X-ray, ผลประเมินอายุกระดูก, กราฟการเจริญเติบโตเทียบมาตรฐาน WHO และคำแนะนำทางคลินิก",
-      en: "Click a name to view X-ray history, bone age results, a WHO growth chart, and clinical guidance.",
+      th: "คลิกชื่อผู้ป่วยเพื่อเปิดแฟ้มเคส: อัปโหลด X-ray ให้ AI ประเมินอายุกระดูก, ดูรายละเอียดผล, พิมพ์รายงาน PDF และส่งผล+วันนัดให้ผู้ปกครอง (เข้าไปแล้วกดปุ่ม \"คู่มือการใช้\" อีกครั้ง จะมีทัวร์สอนละเอียดในหน้านั้น)",
+      en: "Click a patient to open their case: upload an X-ray for AI bone age assessment, view detailed results, print a PDF report, and send results + follow-up dates to the parent. (Press \"Tutorial\" again inside for a detailed tour of that page.)",
+    },
+    placement: "top",
+  },
+];
+
+// Parent overview page only (/dashboard)
+const PARENT_STEPS: TourStep[] = [
+  {
+    selector: "[data-tour='stats']",
+    title: { th: "สรุปข้อมูลของลูกคุณ", en: "Your Child's Summary" },
+    body: {
+      th: "ภาพรวมล่าสุด: จำนวนบุตรหลาน, การประเมินวันนี้, รายการที่รอผล และคำแนะนำใหม่จากแพทย์ที่ยังไม่ได้อ่าน",
+      en: "At a glance: your children, today's assessments, pending items, and unread recommendations from the doctor.",
+    },
+    placement: "top",
+  },
+  {
+    selector: "[data-tour='patient-list']",
+    title: { th: "บุตรหลานของคุณ", en: "Your Children" },
+    body: {
+      th: "คลิกชื่อลูกเพื่อดูผลประเมินอายุกระดูก, กราฟการเจริญเติบโตเทียบเกณฑ์ WHO, ดูรายละเอียดแต่ละครั้ง และเปิดรายงานฉบับเต็มเป็น PDF (เข้าไปแล้วกดปุ่ม \"คู่มือการใช้\" อีกครั้ง จะมีทัวร์สอนละเอียดในหน้านั้น)",
+      en: "Click your child's name to see bone age results, WHO growth charts, per-visit details, and the full PDF report. (Press \"Tutorial\" again inside for a detailed tour of that page.)",
+    },
+    placement: "top",
+  },
+  {
+    selector: "[data-tour='nav-rec']",
+    title: { th: "เมนูคำแนะนำจากแพทย์", en: "Doctor's Recommendations" },
+    body: {
+      th: "เมื่อคุณหมอส่งผลตรวจ คำแนะนำและวันนัดจะมาที่เมนูนี้ (พร้อมอีเมลแจ้งเตือน) — รายการที่ยังไม่อ่านจะมีป้ายกำกับ",
+      en: "When the doctor sends results, recommendations and follow-up dates appear here (you'll also get an email). Unread items are flagged.",
+    },
+    placement: "right",
+  },
+];
+
+// Patient detail page (/dashboard/patients/[id]) — doctor
+const PATIENT_DETAIL_DOCTOR_STEPS: TourStep[] = [
+  {
+    selector: "[data-tour='new-assessment']",
+    title: { th: "สร้างการประเมินใหม่", en: "New Assessment" },
+    body: {
+      th: "กดปุ่มนี้เพื่ออัปโหลดภาพ X-ray มือซ้าย พร้อมส่วนสูง/น้ำหนัก แล้ว AI จะวิเคราะห์อายุกระดูกให้ภายใน ~30 วินาที",
+      en: "Upload a left-hand X-ray with height/weight, and the AI estimates bone age in ~30 seconds.",
+    },
+    placement: "bottom",
+  },
+  {
+    selector: "[data-tour='charts']",
+    title: { th: "กราฟการเจริญเติบโต", en: "Growth Charts" },
+    body: {
+      th: "ซ้าย: ส่วนสูงจริงเทียบเกณฑ์ WHO (P3/P50/P97) · ขวา: ส่วนสูงที่ AI พยากรณ์ตอนโต (FAH) เทียบส่วนสูงเป้าหมายตามพันธุกรรม (TH)",
+      en: "Left: actual height vs WHO reference (P3/P50/P97). Right: AI-predicted adult height (FAH) vs genetic target height (TH).",
+    },
+    placement: "top",
+  },
+  {
+    selector: "[data-tour='assessment-history']",
+    title: { th: "ประวัติการประเมิน", en: "Assessment History" },
+    body: {
+      th: "ทุกการตรวจของผู้ป่วยรายนี้ เรียงครั้งล่าสุดขึ้นก่อน แต่ละรายการแสดงสถานะ, อายุกระดูก, ความมั่นใจ AI และปุ่มดูรายละเอียด/พิมพ์รายงาน",
+      en: "Every assessment for this patient, newest first, with status, bone age, AI confidence, and detail/print buttons.",
+    },
+    placement: "top",
+  },
+  {
+    selector: "[data-tour='detail-btn']",
+    title: { th: "ปุ่ม \"ดูรายละเอียด\"", en: "\"View Details\" Button" },
+    body: {
+      th: "เปิดดูภาพ X-ray และ Heatmap (จุดที่ AI ใช้ตัดสินใจ), ตัวเลขเชิงลึกทั้งหมด, การแปลผลทางคลินิก และฟอร์มส่งผล + วันนัดให้ผู้ปกครองทางอีเมล",
+      en: "Opens the X-ray and heatmap (where the AI looked), all detailed metrics, the clinical interpretation, and the form to email results + follow-up dates to the parent.",
+    },
+    placement: "top",
+  },
+  {
+    selector: "[data-tour='print-btn']",
+    title: { th: "ปุ่ม \"พิมพ์รายงาน PDF\"", en: "\"Print PDF Report\" Button" },
+    body: {
+      th: "เปิดรายงานฉบับทางการขนาด A4 (ผลวิเคราะห์ กราฟ ลายเซ็นแพทย์) จากนั้นกด \"พิมพ์ / Save as PDF\" เพื่อสั่งพิมพ์หรือบันทึกเป็นไฟล์ PDF",
+      en: "Opens the official A4 report (results, charts, physician signature). Then press \"Print / Save as PDF\" to print or save it as a PDF file.",
+    },
+    placement: "top",
+  },
+];
+
+// Patient detail page (/dashboard/patients/[id]) — parent
+const PATIENT_DETAIL_PARENT_STEPS: TourStep[] = [
+  {
+    selector: "[data-tour='charts']",
+    title: { th: "กราฟการเติบโตของลูก", en: "Your Child's Growth Charts" },
+    body: {
+      th: "ซ้าย: ส่วนสูงของลูกเทียบเกณฑ์เด็กปกติ (WHO) · ขวา: ส่วนสูงตอนโตที่ AI คาดการณ์ เทียบกับเป้าหมายตามพันธุกรรมจากส่วนสูงพ่อแม่",
+      en: "Left: your child's height vs the WHO standard. Right: the AI's predicted adult height vs the genetic target from parents' heights.",
+    },
+    placement: "top",
+  },
+  {
+    selector: "[data-tour='assessment-history']",
+    title: { th: "ประวัติการตรวจทั้งหมด", en: "All Assessments" },
+    body: {
+      th: "ผลตรวจทุกครั้งของลูก เรียงครั้งล่าสุดขึ้นก่อน พร้อมอายุกระดูก ส่วนสูง น้ำหนัก และวันนัดติดตามครั้งถัดไป",
+      en: "Every visit's results, newest first, with bone age, height, weight, and the next follow-up date.",
+    },
+    placement: "top",
+  },
+  {
+    selector: "[data-tour='detail-btn']",
+    title: { th: "ปุ่ม \"ดูรายละเอียด\"", en: "\"View Details\" Button" },
+    body: {
+      th: "เปิดดูภาพ X-ray, Heatmap ที่ AI ใช้วิเคราะห์, ตัวเลขเชิงลึก (เปอร์เซนไทล์ BMI ฯลฯ) และคำอธิบายผลแบบเข้าใจง่าย",
+      en: "See the X-ray, the AI heatmap, detailed metrics (percentiles, BMI, etc.), and an easy-to-understand interpretation.",
+    },
+    placement: "top",
+  },
+  {
+    selector: "[data-tour='print-btn']",
+    title: { th: "ปุ่ม \"พิมพ์รายงาน PDF\"", en: "\"Print PDF Report\" Button" },
+    body: {
+      th: "เปิดรายงานฉบับเต็มขนาด A4 เก็บไว้หรือนำไปให้แพทย์ท่านอื่นดูได้ — กด \"พิมพ์ / Save as PDF\" เพื่อบันทึกเป็นไฟล์",
+      en: "Opens the full A4 report to keep or share with another doctor. Press \"Print / Save as PDF\" to save it as a file.",
     },
     placement: "top",
   },
@@ -184,34 +311,57 @@ const TTH = 220;  // increased from 180 to handle longer Thai text
 const GAP = 14;
 const PAD = 10;
 
+// จอแคบ (มือถือแนวตั้ง) tooltip ต้องไม่ล้นขอบจอ
+function tooltipWidth() {
+  return Math.min(TW, window.innerWidth - PAD * 2);
+}
+
+// element ต้อง "มองเห็นได้จริง" — บนมือถือ sidebar ถูกเลื่อนออกนอกจอ (drawer ปิด)
+// querySelector ยังเจอ element แต่ spotlight จะชี้ไปนอกจอ จึงต้องข้าม step นั้น
+function stepTargetVisible(selector: string): boolean {
+  const el = document.querySelector<HTMLElement>(selector);
+  if (!el) return false;
+  const r = el.getBoundingClientRect();
+  return r.width > 0 && r.height > 0 && r.right > 8 && r.left < window.innerWidth - 8;
+}
+
 function bestPlacement(r: SpotRect, hint?: TourStep["placement"]): Placement {
-  if (hint && hint !== "auto") return hint as Placement;
+  const tw = tooltipWidth();
   const { innerWidth: vw, innerHeight: vh } = window;
+  // จอแคบ: ซ้าย/ขวาไม่มีที่วางแน่นอน — บังคับ top/bottom แม้ step จะ hint ไว้
+  const narrow = vw < TW + 2 * (GAP + PAD) + 80;
+  if (hint && hint !== "auto" && !(narrow && (hint === "left" || hint === "right"))) {
+    return hint as Placement;
+  }
   const space: Record<Placement, number> = {
     right:  vw - (r.left + r.width) - PAD,
     left:   r.left - PAD,
     bottom: vh - (r.top + r.height) - PAD,
     top:    r.top - PAD,
   };
-  const need: Record<Placement, number> = { right: TW, left: TW, bottom: TTH, top: TTH };
-  for (const p of ["right", "bottom", "left", "top"] as Placement[]) {
+  const need: Record<Placement, number> = { right: tw, left: tw, bottom: TTH, top: TTH };
+  const order: Placement[] = narrow
+    ? ["bottom", "top", "right", "left"]
+    : ["right", "bottom", "left", "top"];
+  for (const p of order) {
     if (space[p] >= need[p]) return p;
   }
   return "bottom";
 }
 
 function tooltipPos(r: SpotRect, p: Placement): { top: number; left: number } {
+  const tw = tooltipWidth();
   const { innerWidth: vw, innerHeight: vh } = window;
   let t = 0, l = 0;
   switch (p) {
     case "right":  t = r.top + r.height / 2 - TTH / 2; l = r.left + r.width + GAP; break;
-    case "left":   t = r.top + r.height / 2 - TTH / 2; l = r.left - TW - GAP;      break;
-    case "bottom": t = r.top + r.height + GAP;           l = r.left + r.width / 2 - TW / 2; break;
-    case "top":    t = r.top - TTH - GAP;                l = r.left + r.width / 2 - TW / 2; break;
+    case "left":   t = r.top + r.height / 2 - TTH / 2; l = r.left - tw - GAP;      break;
+    case "bottom": t = r.top + r.height + GAP;           l = r.left + r.width / 2 - tw / 2; break;
+    case "top":    t = r.top - TTH - GAP;                l = r.left + r.width / 2 - tw / 2; break;
   }
   return {
     top:  Math.max(PAD, Math.min(t, vh - TTH - PAD)),
-    left: Math.max(PAD, Math.min(l, vw - TW  - PAD)),
+    left: Math.max(PAD, Math.min(l, vw - tw  - PAD)),
   };
 }
 
@@ -253,7 +403,7 @@ function WelcomeGate({
         aria-label={ui.welcomeTitle}
         className="relative glass-strong rounded-3xl p-8 shadow-2xl animate-welcome-in"
         style={{
-          width: 360,
+          width: "min(360px, calc(100vw - 32px))",
           zIndex: 9999,
           boxShadow: "0 32px 80px -16px rgb(0 0 0 / 0.55), 0 0 0 1px rgb(var(--primary) / 0.20), inset 0 1px 0 rgb(255 255 255 / 0.12)",
         }}
@@ -299,7 +449,7 @@ function WelcomeGate({
             style={{ background: "rgb(var(--primary)/0.10)", color: "rgb(var(--primary))" }}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            {ui.welcomeSteps}
+            {ui.welcomeSteps(steps.length)}
           </span>
         </div>
 
@@ -372,6 +522,14 @@ function TourOverlay({
     setSpot(rect);
     setPlace(p);
     setTtPos(tooltipPos(rect, p));
+  }, [step]);
+
+  // เลื่อนจอไปหา element ของ step ก่อน (ปุ่มบางตัวอยู่ใต้ fold โดยเฉพาะบนมือถือ)
+  useEffect(() => {
+    const el = document.querySelector<HTMLElement>(step.selector);
+    if (!el) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
   }, [step]);
 
   useLayoutEffect(() => {
@@ -455,7 +613,7 @@ function TourOverlay({
         className="fixed glass-strong rounded-2xl p-5 shadow-2xl animate-step-in"
         style={{
           zIndex: 9997,
-          width:  TW,
+          width:  `min(${TW}px, calc(100vw - ${PAD * 2}px))`,
           ...ttPos,
           transition: "top 0.3s cubic-bezier(0.16,1,0.3,1), left 0.3s cubic-bezier(0.16,1,0.3,1)",
           boxShadow: "0 24px 64px -16px rgb(0 0 0 / 0.5), 0 0 0 1px rgb(var(--primary) / 0.18), inset 0 1px 0 rgb(255 255 255 / 0.10)",
@@ -579,16 +737,33 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [mounted,      setMounted]      = useState(false);
   const [showWelcome,  setShowWelcome]  = useState(false);
   const [role,         setRole]         = useState<string | null>(null);
+  // จอ ≥ md เท่านั้นที่ mount มาสคอต 3D — CSS hidden อย่างเดียวไม่พอ เพราะยังดาวน์โหลด chunk อยู่ดี
+  const [isDesktop,    setIsDesktop]    = useState(false);
   const { lang } = useI18n();
   const pathname = usePathname();
 
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => { setRole(getCachedRole()); }, [pathname]);
 
-  // Route- and role-aware step set (3 shared steps + 2 role-specific ones = 5 either way)
-  const steps = pathname.startsWith("/dashboard")
-    ? [...DASHBOARD_SHARED_STEPS, ...(role === "admin" ? ADMIN_STEPS : DOCTOR_PARENT_STEPS)]
-    : LANDING_STEPS;
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  // Route- and role-aware step set
+  const isPatientDetail =
+    /^\/dashboard\/patients\/[^/]+$/.test(pathname) && pathname !== "/dashboard/patients/new";
+  const steps = isPatientDetail
+    ? (role === "doctor" ? PATIENT_DETAIL_DOCTOR_STEPS : PATIENT_DETAIL_PARENT_STEPS)
+    : pathname.startsWith("/dashboard")
+      ? [
+          ...DASHBOARD_SHARED_STEPS,
+          ...(role === "admin" ? ADMIN_STEPS : role === "doctor" ? DOCTOR_STEPS : PARENT_STEPS),
+        ]
+      : LANDING_STEPS;
 
   // Reset tour + welcome gate on navigation
   useEffect(() => {
@@ -613,14 +788,18 @@ export function TourProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(() => {
     setShowWelcome(false);
-    setStepIndex(0);
+    // เริ่มที่ step แรกที่มี element มองเห็นได้จริง (ปุ่มบางตัวยังไม่มี / sidebar ปิดอยู่บนมือถือ)
+    let idx = 0;
+    while (idx < steps.length && !stepTargetVisible(steps[idx].selector)) idx++;
+    if (idx >= steps.length) return;
+    setStepIndex(idx);
     setIsActive(true);
-  }, []);
+  }, [steps]);
 
-  // Skip steps whose target element doesn't exist on the current page
+  // Skip steps whose target element doesn't exist (or is off-screen) on the current page
   const advanceOrStop = useCallback((idx: number) => {
     if (idx >= steps.length) { stop(); return; }
-    if (!document.querySelector(steps[idx].selector)) { advanceOrStop(idx + 1); return; }
+    if (!stepTargetVisible(steps[idx].selector)) { advanceOrStop(idx + 1); return; }
     setStepIndex(idx);
   }, [steps, stop]);
 
@@ -637,12 +816,14 @@ export function TourProvider({ children }: { children: ReactNode }) {
         <div
           className="fixed bottom-6 right-6 z-20 flex flex-col items-center gap-0 print:hidden"
         >
-          {/* จอเล็ก: ซ่อนมาสคอต — ตัวมันกว้างพอจะทับเนื้อหากลางจอ เหลือแค่ปุ่มคู่มือ */}
-          <HippoMascot
-            size="sm"
-            message={lang === "th" ? "สวัสดีครับ! พร้อมช่วยติดตามการเติบโต" : "Hi! Ready to track growth"}
-            className="mb-4 hidden md:block"
-          />
+          {/* จอเล็ก: ไม่ mount มาสคอตเลย — ประหยัดทั้ง three.js chunk และโมเดล 1.8MB */}
+          {isDesktop && (
+            <HippoMascot
+              size="sm"
+              message={lang === "th" ? "สวัสดีครับ! พร้อมช่วยติดตามการเติบโต" : "Hi! Ready to track growth"}
+              className="mb-4"
+            />
+          )}
           <TourButton />
         </div>
       )}

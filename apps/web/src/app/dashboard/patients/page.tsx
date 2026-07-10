@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { childrenApi, authApi, type Child } from "@/lib/api";
+import { childrenApi, type Child } from "@/lib/api";
+import { useUser } from "@/lib/user";
 import { useI18n } from "@/lib/i18n";
 import { PatientsSkeleton } from "@/components/Skeleton";
 import { ScrollFade } from "@/components/ScrollFade";
@@ -32,20 +33,16 @@ export default function PatientsPage() {
   const [filter, setFilter] = useState<"all" | "M" | "F">("all");
   const [isDoctor, setIsDoctor] = useState(false);
 
+  // role มาจาก context ของ layout — หน้านี้ยิงแค่รายชื่อเด็กอย่างเดียว
+  // (ผูกกับ role ไม่ใช่ object user — object เปลี่ยน identity ตอน cache→ของจริง จะยิงซ้ำ)
+  const { user } = useUser();
+  const role = user?.role;
   useEffect(() => {
-    if (!localStorage.getItem("token")) { router.replace("/login"); return; }
-    // fast path: seed from localStorage; always confirm from API
-    try {
-      const cached = JSON.parse(localStorage.getItem("user") || "{}");
-      if (cached.role) setIsDoctor(cached.role === "doctor");
-    } catch {}
+    if (!role) return;
+    setIsDoctor(role === "doctor");
     (async () => {
       try {
-        const [{ data: me }, { data: kids }] = await Promise.all([
-          authApi.me(),
-          childrenApi.list(),
-        ]);
-        setIsDoctor(me.role === "doctor");
+        const { data: kids } = await childrenApi.list();
         setChildren(kids);
       } catch {
         router.replace("/login");
@@ -53,7 +50,7 @@ export default function PatientsPage() {
         setLoading(false);
       }
     })();
-  }, [router]);
+  }, [role, router]);
 
   if (loading) return <PatientsSkeleton />;
 
@@ -72,7 +69,7 @@ export default function PatientsPage() {
         style={{ background: "rgb(var(--aurora-4))" }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-5 glass border-b border-border/50">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-4 sm:pr-8 py-5 glass border-b border-border/50">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-xl font-bold text-ink">
@@ -99,7 +96,7 @@ export default function PatientsPage() {
         </div>
       </header>
 
-      <div className="relative z-10 p-8 space-y-5">
+      <div className="relative z-10 p-4 sm:p-6 lg:p-8 space-y-5">
         {/* Search & Filter bar */}
         <div className="glass rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap">
           {/* Search input */}

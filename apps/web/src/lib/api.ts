@@ -77,6 +77,8 @@ export const childrenApi = {
 
 // ── Assessments ───────────────────────────────────────────
 export const assessmentsApi = {
+  // ทั้งหมดของผู้ใช้ในครั้งเดียว (หมอ: เคสที่สร้าง / ผู้ปกครอง: ของลูกทุกคน) — ภาพถูกตัดออก ใช้กับ dashboard
+  mine: () => apiClient.get<Assessment[]>('/assessments/mine'),
   listByChild: (childId: string) => apiClient.get<Assessment[]>(`/assessments/child/${childId}`),
   get: (id: string) => apiClient.get<Assessment>(`/assessments/${id}`),
 

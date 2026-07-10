@@ -7,7 +7,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { authApi } from "@/lib/api";
+import { useUser } from "@/lib/user";
 import { useI18n } from "@/lib/i18n";
 import { PatientsSkeleton } from "@/components/Skeleton";
 import { ScrollFade } from "@/components/ScrollFade";
@@ -76,13 +76,16 @@ export function AdminListPage<T extends { id: string }>({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
 
+  // role มาจาก context ของ layout — list endpoint มี admin guard ฝั่ง server อยู่แล้ว
+  // (ผูกกับ role ไม่ใช่ object user — กันยิง fetch ซ้ำตอน cache→ของจริง)
+  const { user } = useUser();
+  const role = user?.role;
   useEffect(() => {
-    if (!localStorage.getItem("token")) { router.replace("/login"); return; }
+    if (!role) return;
+    if (role !== "admin") { router.replace("/dashboard"); return; }
     (async () => {
       try {
-        // list endpoint มี admin guard ฝั่ง server อยู่แล้ว — ยิงขนานกับ me() ได้ ลด 1 RTT
-        const [{ data: me }, { data }] = await Promise.all([authApi.me(), fetcher()]);
-        if (me.role !== "admin") { router.replace("/dashboard"); return; }
+        const { data } = await fetcher();
         setRows(data);
       } catch {
         router.replace("/login");
@@ -92,7 +95,7 @@ export function AdminListPage<T extends { id: string }>({
     })();
     // fetcher เป็น config คงที่ต่อหน้า — ไม่ใส่ใน deps เพื่อไม่ refetch ทุก render
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  }, [role, router]);
 
   if (loading) return <PatientsSkeleton />;
 

@@ -7,9 +7,23 @@ import { childrenApi, assessmentsApi, type Child, type Assessment } from "@/lib/
 import { ScrollFade } from "@/components/ScrollFade";
 import { useI18n } from "@/lib/i18n";
 import { MascotBot } from "@/components/MascotBot";
+import dynamic from "next/dynamic";
+import { useUser } from "@/lib/user";
 import { calcAge, calcAgeMonths, ageMonthsAt, fmtDate, fmtYearsMonths, targetHeightCm, RISK_LABEL } from "@/components/patient/utils";
-import { GrowthChart } from "@/components/patient/GrowthChart";
 import { FahThChart } from "@/components/patient/FahThChart";
+
+// GrowthChart ลาก recharts (~356KB chunk) — dynamic import ให้โหลดหลังหน้าแสดงผลแล้ว
+const GrowthChart = dynamic(
+  () => import("@/components/patient/GrowthChart").then((m) => m.GrowthChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-48 flex items-center justify-center">
+        <div className="w-6 h-6 border-2 border-border border-t-primary rounded-full animate-spin" />
+      </div>
+    ),
+  },
+);
 import { XrayScanLoader } from "@/components/patient/XrayScanLoader";
 import { AssessmentCard } from "@/components/patient/AssessmentCard";
 import { NewAssessmentPanel } from "@/components/patient/NewAssessmentPanel";
@@ -66,12 +80,14 @@ export default function PatientDetailPage() {
     setTimeout(tick, 2500);
   };
 
+  // role มาจาก context ของ layout (โหลด /auth/me ครั้งเดียว)
+  const { user } = useUser();
+  useEffect(() => {
+    if (user) setIsDoctor(user.role === "doctor");
+  }, [user]);
+
   useEffect(() => {
     if (!localStorage.getItem("token")) { router.replace("/login"); return; }
-    try {
-      const u = JSON.parse(localStorage.getItem("user") || "{}");
-      if (u.role) setIsDoctor(u.role === "doctor");
-    } catch {}
     (async () => {
       try {
         const [{ data: c }, { data: a }] = await Promise.all([
@@ -155,10 +171,10 @@ export default function PatientDetailPage() {
       <div className="fixed top-[-10%] right-[-6%] w-[520px] h-[520px] rounded-full blur-[140px] opacity-[0.11] animate-aurora pointer-events-none"
         style={{ background: isM ? "rgb(var(--aurora-1))" : "rgb(var(--accent))" }} />
 
-      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-4 glass border-b border-border/50">
-        <div className="flex items-center gap-4">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-4 sm:pr-8 py-4 glass border-b border-border/50">
+        <div className="flex items-center gap-2 sm:gap-4">
           <TransitionLink back href="/dashboard/patients"
-            className="w-9 h-9 flex items-center justify-center rounded-xl border border-border text-muted hover:text-ink hover:border-border/80 transition-all flex-shrink-0">
+            className="flex w-9 h-9 items-center justify-center rounded-xl border border-border text-muted hover:text-ink hover:border-border/80 transition-all flex-shrink-0">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
             </svg>
@@ -179,14 +195,16 @@ export default function PatientDetailPage() {
           </div>
 
           {isDoctor && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <button onClick={() => setShowNew(true)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 active:scale-[0.98]"
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+              <button onClick={() => setShowNew(true)} data-tour="new-assessment"
+                className="flex items-center gap-2 px-3 sm:px-5 py-2.5 rounded-xl text-sm font-body font-semibold text-white transition-all hover:-translate-y-0.5 active:scale-[0.98]"
                 style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))", boxShadow: "0 6px 18px rgb(var(--primary)/0.35)" }}>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                 </svg>
-                {th ? "ประเมินใหม่" : "New Assessment"}
+                {/* จอเล็ก: เหลือแค่ไอคอน + คำสั้น ไม่ให้ header ล้น */}
+                <span className="hidden sm:inline">{th ? "ประเมินใหม่" : "New Assessment"}</span>
+                <span className="sm:hidden">{th ? "ประเมิน" : "New"}</span>
               </button>
               <button onClick={() => setShowSettings(true)}
                 className="w-9 h-9 flex items-center justify-center rounded-xl border border-border text-muted hover:text-ink hover:border-border/80 transition-all"
@@ -208,7 +226,7 @@ export default function PatientDetailPage() {
         </div>
       </header>
 
-      <div className="relative z-10 p-8 space-y-6 max-w-5xl">
+      <div className="relative z-10 p-4 sm:p-6 lg:p-8 space-y-6 max-w-5xl">
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <div className="col-span-1 glass rounded-2xl p-5 space-y-3">
@@ -260,9 +278,9 @@ export default function PatientDetailPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div data-tour="charts" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <section className="glass rounded-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-border/50">
+            <div className="px-4 sm:px-6 py-4 border-b border-border/50">
               <h2 className="font-display text-sm font-bold text-ink">{th ? "กราฟพัฒนาการส่วนสูง" : "Height Growth Chart"}</h2>
               <p className="font-body text-[11px] text-muted mt-0.5">{th ? "ส่วนสูงจริง เทียบกับเกณฑ์อ้างอิง WHO (P3/P50/P97)" : "Actual height vs WHO reference (P3/P50/P97)"}</p>
             </div>
@@ -272,7 +290,7 @@ export default function PatientDetailPage() {
           </section>
 
           <section className="glass rounded-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-border/50">
+            <div className="px-4 sm:px-6 py-4 border-b border-border/50">
               <h2 className="font-display text-sm font-bold text-ink">{th ? "กราฟ FAH vs TH" : "FAH vs Target Height"}</h2>
               <p className="font-body text-[11px] text-muted mt-0.5">
                 {th ? "ส่วนสูงคาดการณ์ผู้ใหญ่ เทียบกับส่วนสูงเป้าหมาย" : "Predicted adult height vs target height"}
@@ -284,8 +302,8 @@ export default function PatientDetailPage() {
           </section>
         </div>
 
-        <section className="glass rounded-2xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-border/50 flex items-center justify-between">
+        <section data-tour="assessment-history" className="glass rounded-2xl overflow-hidden">
+          <div className="px-4 sm:px-6 py-4 border-b border-border/50 flex items-center justify-between">
             <div>
               <h2 className="font-display text-sm font-bold text-ink">{th ? "ประวัติการประเมิน" : "Assessment History"}</h2>
               <p className="font-body text-[11px] text-muted mt-0.5">{assessments.length} {th ? "รายการ" : "records"}</p>

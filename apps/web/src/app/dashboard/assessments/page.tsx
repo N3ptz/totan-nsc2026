@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { authApi, type Assessment } from "@/lib/api";
+import { type Assessment } from "@/lib/api";
+import { useUser } from "@/lib/user";
 import { useI18n } from "@/lib/i18n";
 import { AssessmentsSkeleton } from "@/components/Skeleton";
 
@@ -23,24 +23,19 @@ const statusConfig = {
 } as const;
 
 export default function AssessmentsPage() {
-  const router = useRouter();
   const { lang } = useI18n();
   const th = lang === "th";
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDoctor, setIsDoctor] = useState(false);
 
+  // ผู้ใช้มาจาก context ของ layout — ไม่ยิง /auth/me ซ้ำ
+  const { user } = useUser();
   useEffect(() => {
-    if (!localStorage.getItem("token")) { router.replace("/login"); return; }
-    try {
-      const cached = JSON.parse(localStorage.getItem("user") || "{}");
-      if (cached.role) setIsDoctor(cached.role === "doctor");
-    } catch {}
-    authApi.me()
-      .then(({ data }) => setIsDoctor(data.role === "doctor"))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [router]);
+    if (!user) return;
+    setIsDoctor(user.role === "doctor");
+    setLoading(false);
+  }, [user]);
 
   if (loading) return <AssessmentsSkeleton />;
 
@@ -53,7 +48,7 @@ export default function AssessmentsPage() {
         style={{ background: "rgb(var(--aurora-1))" }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-5 glass border-b border-border/50">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-4 sm:pr-8 py-5 glass border-b border-border/50">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-xl font-bold text-ink">{th ? "ผลการประเมิน" : "Assessments"}</h1>
@@ -62,7 +57,7 @@ export default function AssessmentsPage() {
         </div>
       </header>
 
-      <div className="relative z-10 p-8">
+      <div className="relative z-10 p-4 sm:p-6 lg:p-8">
         {loading ? (
           <div className="glass rounded-2xl p-16 text-center">
             <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin mx-auto mb-3" />

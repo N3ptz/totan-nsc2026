@@ -3,16 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { authApi } from "@/lib/api";
+import { useUser, type AuthUser } from "@/lib/user";
 import { useI18n } from "@/lib/i18n";
 import { AvatarPicker } from "@/components/AvatarPicker";
 
-interface User { id: string; email: string; role: string; profile?: { fullName?: string; phone?: string; avatarUrl?: string } }
+type User = AuthUser;
 
 export default function SettingsPage() {
   const router = useRouter();
   const { lang, t } = useI18n();
   const ts = t.settings;
 
+  // ผู้ใช้มาจาก context ของ layout — refreshUser ไว้ให้ sidebar อัปเดตหลังแก้โปรไฟล์
+  const { user: ctxUser, refresh: refreshUser } = useUser();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -34,22 +37,15 @@ export default function SettingsPage() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  // seed ฟอร์มจาก context ครั้งแรก (layout เป็นคนยิง /auth/me — หน้านี้ไม่ยิงซ้ำ)
   useEffect(() => {
-    if (!localStorage.getItem("token")) { router.replace("/login"); return; }
-    (async () => {
-      try {
-        const { data } = await authApi.me();
-        setUser(data);
-        setFullName(data.profile?.fullName ?? "");
-        setPhone(data.profile?.phone ?? "");
-        if (data.profile?.avatarUrl) setAvatarPreview(data.profile.avatarUrl);
-      } catch {
-        router.replace("/login");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [router]);
+    if (!ctxUser || user) return; // seed ครั้งเดียว ไม่ทับค่าที่ผู้ใช้กำลังพิมพ์
+    setUser(ctxUser);
+    setFullName(ctxUser.profile?.fullName ?? "");
+    setPhone(ctxUser.profile?.phone ?? "");
+    if (ctxUser.profile?.avatarUrl) setAvatarPreview(ctxUser.profile.avatarUrl);
+    setLoading(false);
+  }, [ctxUser, user]);
 
   const saveProfile = async () => {
     setProfileSaving(true);
@@ -60,6 +56,7 @@ export default function SettingsPage() {
         setAvatarFile(null);
       }
       await authApi.updateProfile({ fullName, phone });
+      refreshUser(); // ให้ sidebar (layout) เห็นชื่อ/รูปใหม่ทันที
       setProfileStatus("saved");
       setTimeout(() => setProfileStatus("idle"), 3000);
     } catch {
@@ -119,7 +116,7 @@ export default function SettingsPage() {
         style={{ background: "rgb(var(--aurora-3))" }} />
 
       <main className="min-h-screen relative z-10">
-        <header className="sticky top-0 z-30 flex items-center pl-16 lg:pl-8 pr-8 py-4 glass border-b border-border/50">
+        <header className="sticky top-0 z-30 flex items-center pl-16 lg:pl-8 pr-4 sm:pr-8 py-4 glass border-b border-border/50">
           <div>
             <h1 className="font-display text-xl font-bold text-ink">{ts.title}</h1>
             <p className="font-body text-xs text-muted mt-0.5">
@@ -128,7 +125,7 @@ export default function SettingsPage() {
           </div>
         </header>
 
-        <div className="p-8">
+        <div className="p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-2 gap-6 items-stretch">
 
           {/* ── คอลัมน์ซ้าย: Profile ── */}

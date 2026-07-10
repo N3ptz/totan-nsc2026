@@ -1,17 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { authApi } from "@/lib/api";
 import { useTheme } from "@/lib/theme";
 import { useI18n } from "@/lib/i18n";
+import { UserProvider, type AuthUser } from "@/lib/user";
 
-interface SidebarUser {
-  email: string;
-  role: string;
-  profile?: { fullName?: string; avatarUrl?: string };
-}
+type SidebarUser = AuthUser;
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router   = useRouter();
@@ -50,16 +47,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     });
   };
 
+  // /auth/me ยิงที่นี่ "ครั้งเดียว" แล้วแจกให้ทุกหน้าใน dashboard ผ่าน UserProvider
+  const fetchMe = useCallback(() => {
+    authApi.me()
+      .then(({ data }) => { setUser(data); setReady(true); })
+      .catch(() => router.replace("/login"));
+  }, [router]);
+
   useEffect(() => {
     if (!localStorage.getItem("token")) { router.replace("/login"); return; }
     try {
       const cached = JSON.parse(localStorage.getItem("user") || "{}");
       if (cached.role) setUser(cached as SidebarUser);
     } catch {}
-    authApi.me()
-      .then(({ data }) => { setUser(data); setReady(true); })
-      .catch(() => router.replace("/login"));
-  }, [router]);
+    fetchMe();
+  }, [router, fetchMe]);
+
+  // ค่า context คงที่ต่อ user เดียวกัน — ไม่ให้ทุกหน้า re-render ตามทุก state ของ layout
+  const userCtx = useMemo(() => ({ user, refresh: fetchMe }), [user, fetchMe]);
 
   const logout = () => {
     localStorage.removeItem("token");
@@ -92,6 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }`;
 
   return (
+    <UserProvider value={userCtx}>
     <div className="min-h-screen flex bg-bg">
 
       {/* ── Mobile: hamburger ──────────────────────────────────────── */}
@@ -203,6 +209,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <Link
                 key={item.href}
                 href={item.href}
+                data-tour={item.href === "/dashboard/recommendations" ? "nav-rec" : undefined}
                 title={collapsed ? item.label : undefined}
                 className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-body font-medium transition-all duration-200 ${
                   collapsed ? "justify-center" : ""
@@ -266,6 +273,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
     </div>
+    </UserProvider>
   );
 }
 

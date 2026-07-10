@@ -3,13 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { authApi, childrenApi, assessmentsApi, recommendationsApi, type Child, type Assessment, type Recommendation } from "@/lib/api";
+import { childrenApi, assessmentsApi, recommendationsApi, type Child, type Assessment, type Recommendation } from "@/lib/api";
+import { useUser } from "@/lib/user";
 import { useI18n } from "@/lib/i18n";
 import { DashboardSkeleton } from "@/components/Skeleton";
 import { ScrollFade } from "@/components/ScrollFade";
 import { MascotBot } from "@/components/MascotBot";
-
-interface User { id: string; email: string; role: string; profile?: { fullName?: string } }
 
 // Count-up for stat values
 function useCountUp(target: number, duration = 1100) {
@@ -33,47 +32,42 @@ export default function DashboardPage() {
   const { lang, t } = useI18n();
   const td = t.dash;
 
-  const [user, setUser] = useState<User | null>(null);
+  // ผู้ใช้มาจาก layout (โหลด /auth/me ครั้งเดียว) — ไม่ยิงซ้ำที่นี่แล้ว
+  const { user } = useUser();
+  // ผูก effect กับ role (string) ไม่ใช่ object user — object เปลี่ยน identity ตอน cache→ของจริง จะยิง fetch ซ้ำ
+  const role = user?.role;
   const [children, setChildren] = useState<Child[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!localStorage.getItem("token")) { router.replace("/login"); return; }
+    if (!role) return; // รอ layout โหลดผู้ใช้ (มี cache ใน localStorage — มาแทบทันที)
+    if (role === "admin") { router.replace("/dashboard/admin"); return; }
     (async () => {
-      try {
-        const { data } = await authApi.me();
-        if (data.role === "admin") { router.replace("/dashboard/admin"); return; }
-        setUser(data);
-        try {
-          const { data: kids } = await childrenApi.list();
-          setChildren(kids);
-          if (kids.length > 0) {
-            const results = await Promise.allSettled(kids.map(k => assessmentsApi.listByChild(k.id)));
-            const all: Assessment[] = [];
-            for (const r of results) {
-              if (r.status === "fulfilled") all.push(...r.value.data);
-            }
-            setAssessments(all);
-          }
-        } catch {}
-        try {
-          // หมอดูคำแนะนำที่ "ส่งแล้ว" / ผู้ปกครองดูที่ "ได้รับ"
-          const { data: recs } = data.role === "doctor"
-            ? await recommendationsApi.sent()
-            : await recommendationsApi.mine();
-          setRecommendations(recs);
-        } catch {}
-      } catch {
-        router.replace("/login");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [router]);
+      // ยิงขนานทั้ง 3 อย่างในรอบเดียว (เดิมเป็น waterfall 4 ชั้น: me → children → N×assessments → recs)
+      const [kidsR, assessR, recsR] = await Promise.allSettled([
+        childrenApi.list(),
+        assessmentsApi.mine(),
+        role === "doctor" ? recommendationsApi.sent() : recommendationsApi.mine(),
+      ]);
 
-  if (loading) return <DashboardSkeleton />;
+      const kids = kidsR.status === "fulfilled" ? kidsR.value.data : [];
+      setChildren(kids);
+      if (recsR.status === "fulfilled") setRecommendations(recsR.value.data);
+
+      if (assessR.status === "fulfilled") {
+        setAssessments(assessR.value.data);
+      } else if (kids.length > 0) {
+        // fallback: backend เก่ายังไม่มี /assessments/mine → กลับไปยิงรายเด็ก (ขนาน)
+        const results = await Promise.allSettled(kids.map(k => assessmentsApi.listByChild(k.id)));
+        setAssessments(results.flatMap(r => (r.status === "fulfilled" ? r.value.data : [])));
+      }
+      setLoading(false);
+    })();
+  }, [role, router]);
+
+  if (loading || !user) return <DashboardSkeleton />;
 
   const isDoctor = user?.role === "doctor";
   const displayName = user?.profile?.fullName ?? user?.email ?? "";
@@ -111,7 +105,7 @@ export default function DashboardPage() {
       <main className="min-h-screen relative z-10">
 
         {/* Top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between pl-16 lg:pl-8 pr-8 py-4 glass border-b border-border/50">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-3 pl-16 lg:pl-8 pr-4 sm:pr-8 py-4 glass border-b border-border/50">
           <div>
             <h1 className="font-display text-xl font-bold text-ink">
               {td.greeting}, {displayName.split(" ")[0] || displayName} 👋
@@ -131,7 +125,7 @@ export default function DashboardPage() {
           )}
         </header>
 
-        <div className="p-8 space-y-6">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-6">
 
           {/* Stats grid */}
           <div data-tour="stats" className="grid grid-cols-2 lg:grid-cols-4 gap-4">

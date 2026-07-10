@@ -137,7 +137,7 @@ export default function NewPatientPage() {
         style={{ background: "rgb(var(--aurora-3))" }} />
 
       {/* Header */}
-      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-8 py-5 glass border-b border-border/50">
+      <header className="sticky top-0 z-30 pl-16 lg:pl-8 pr-4 sm:pr-8 py-5 glass border-b border-border/50">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/patients"
             className="w-9 h-9 flex items-center justify-center rounded-xl border border-border text-muted hover:text-ink hover:border-border/80 transition-all">
@@ -156,7 +156,7 @@ export default function NewPatientPage() {
         </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="relative z-10 p-8">
+      <form onSubmit={handleSubmit} className="relative z-10 p-4 sm:p-6 lg:p-8">
 
         {/* Error */}
         {error && (

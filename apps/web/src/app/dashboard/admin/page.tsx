@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { authApi, apiClient, adminApi } from "@/lib/api";
+import { apiClient, adminApi } from "@/lib/api";
+import { useUser } from "@/lib/user";
 import { useI18n } from "@/lib/i18n";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -173,17 +174,14 @@ export default function AdminDashboard() {
   );
   const [analytics, setAnalytics] = useState<AnalyticsStat[]>(ANALYTICS_BASE);
 
-  // RBAC guard — redirect non-admins immediately
+  // RBAC guard — ใช้ผู้ใช้จาก context ของ layout (ไม่ยิง /auth/me ซ้ำ)
+  const { user: ctxUser } = useUser();
   useEffect(() => {
-    if (!localStorage.getItem("token")) { router.replace("/login"); return; }
-    authApi.me()
-      .then(({ data }) => {
-        if (data.role !== "admin") { router.replace("/dashboard"); return; }
-        setUser(data);
-      })
-      .catch(() => router.replace("/login"))
-      .finally(() => setLoading(false));
-  }, [router]);
+    if (!ctxUser) return;
+    if (ctxUser.role !== "admin") { router.replace("/dashboard"); return; }
+    setUser(ctxUser as User);
+    setLoading(false);
+  }, [ctxUser, router]);
 
   // Real service health checks
   useEffect(() => {
@@ -261,7 +259,7 @@ export default function AdminDashboard() {
       <main className="min-h-screen relative z-10">
 
         {/* ── Top bar ──────────────────────────────────── */}
-        <header className="sticky top-0 z-30 flex items-center justify-between pl-16 lg:pl-8 pr-8 py-4 glass border-b border-border/50">
+        <header className="sticky top-0 z-30 flex items-center justify-between pl-16 lg:pl-8 pr-4 sm:pr-8 py-4 glass border-b border-border/50">
           <div>
             <div className="flex items-center gap-2.5 flex-wrap">
               <h1 className="font-display text-xl font-bold text-ink">
@@ -290,7 +288,7 @@ export default function AdminDashboard() {
           </Link>
         </header>
 
-        <div className="p-6 lg:p-8 space-y-10">
+        <div className="p-4 sm:p-6 lg:p-8 space-y-10">
 
           {/* ══════════════════════════════════════════════
               A. SYSTEM HEALTH STATUS

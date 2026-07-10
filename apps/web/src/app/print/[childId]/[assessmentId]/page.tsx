@@ -161,9 +161,9 @@ function FahThChartPrint({ assessments }: { assessments: Assessment[] }) {
 // ── Small sub-components ──────────────────────────────────
 function Row({ label, value, hi }: { label: string; value: string; hi?: boolean }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3.5px 0", borderBottom: "1px solid #f1f5f9" }}>
-      <span style={{ fontSize: 10, color: "#94a3b8" }}>{label}</span>
-      <span style={{ fontSize: 11, fontWeight: hi ? 700 : 600, color: hi ? "#1d4ed8" : "#1e293b", textAlign: "right" }}>{value}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "4px 0", borderBottom: "1px solid #f1f5f9" }}>
+      <span style={{ fontSize: 10.5, color: "#64748b" }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: hi ? 700 : 600, color: hi ? "#1d4ed8" : "#1e293b", textAlign: "right" }}>{value}</span>
     </div>
   );
 }
@@ -175,9 +175,9 @@ function Metric({ label, value, sub, hi }: { label: string; value: string; sub?:
       borderRadius: 8, padding: "7px 9px",
       background: hi ? "#eff6ff" : "#f8fafc",
     }}>
-      <div style={{ fontSize: 8.5, color: "#94a3b8", lineHeight: 1.3, marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color: hi ? "#1d4ed8" : "#1e293b", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ fontSize: 9, color: "#64748b", marginTop: 3 }}>{sub}</div>}
+      <div style={{ fontSize: 9.5, color: "#64748b", lineHeight: 1.3, marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: hi ? "#1d4ed8" : "#1e293b", lineHeight: 1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: "#64748b", marginTop: 3 }}>{sub}</div>}
     </div>
   );
 }
@@ -192,6 +192,16 @@ export default function PrintReportPage() {
   const [doctorName, setDoctorName] = useState("");
   const [loading, setLoading]       = useState(true);
   const [err, setErr]               = useState("");
+  // จอแคบกว่ากระดาษ A4 (~794px) → ย่อ preview ให้พอดีจอ (ตอนพิมพ์จริงกลับเป็น 100% เสมอ)
+  const [previewZoom, setPreviewZoom] = useState(1);
+
+  useEffect(() => {
+    const A4_PX = 794; // 210mm @96dpi
+    const compute = () => setPreviewZoom(Math.min(1, (window.innerWidth - 16) / A4_PX));
+    compute();
+    window.addEventListener("resize", compute, { passive: true });
+    return () => window.removeEventListener("resize", compute);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -279,13 +289,13 @@ export default function PrintReportPage() {
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
         body{background:#f3f4f6}
-        #report{width:210mm;min-height:297mm;margin:0 auto;padding:14mm 16mm;box-shadow:0 4px 32px rgba(0,0,0,.14)}
+        #report{width:210mm;min-height:297mm;margin:0 auto;padding:14mm 16mm;box-shadow:0 4px 32px rgba(0,0,0,.14);zoom:var(--pv-zoom,1)}
         .print-footer{display:none}
         @media print{
           @page{size:A4;margin:12mm 14mm 15mm}
           html,body{background:white!important}
           *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
-          #report{width:100%;margin:0;padding:0;box-shadow:none}
+          #report{width:100%;margin:0;padding:0;box-shadow:none;zoom:1!important}
           .np{display:none!important}
 
           /* ── Pagination: ห้าม section ขาดกลางหน้า ── */
@@ -312,18 +322,19 @@ export default function PrintReportPage() {
       </div>
 
       {/* ── Screen toolbar (hidden when printing) ── */}
-      <div className="np" style={{ position: "fixed", inset: "0 0 auto", zIndex: 999, background: "#0f172a", padding: "10px 20px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div className="np" style={{ position: "fixed", inset: "0 0 auto", zIndex: 999, background: "#0f172a", padding: "10px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "#ffffff", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/tohtan_bgremover.png" alt="โตทัน" style={{ width: 26, height: 26, objectFit: "contain" }} />
           </div>
-          <div>
-            <span style={{ color: "white", fontSize: 13, fontWeight: 700 }}>รายงานพร้อมพิมพ์</span>
-            <span style={{ color: "#94a3b8", fontSize: 11, marginLeft: 10 }}>Report ID: {reportId} · {child.name}</span>
+          <div style={{ minWidth: 0 }}>
+            <span style={{ color: "white", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>รายงานพร้อมพิมพ์</span>
+            {/* จอแคบ: ซ่อนรายละเอียด Report ID กันแถบล้น */}
+            <span className="hidden sm:inline" style={{ color: "#94a3b8", fontSize: 11, marginLeft: 10 }}>Report ID: {reportId} · {child.name}</span>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
           <button
             onClick={() => window.print()}
             style={{ padding: "8px 18px", background: "#2563eb", color: "white", border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
@@ -346,7 +357,7 @@ export default function PrintReportPage() {
       <div className="np" style={{ height: 52 }} />
 
       {/* ═══════════════════════════════════════ REPORT ═══════ */}
-      <div id="report" style={S}>
+      <div id="report" style={{ ...S, ["--pv-zoom" as string]: previewZoom } as React.CSSProperties}>
 
         {/* ── Header bar ── */}
         <div className="sec keep-with-next" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 11, borderBottom: "2.5px solid #1e3a5f", marginBottom: 13 }}>
