@@ -73,3 +73,5 @@ skills-lock.json
 # Runtime-uploaded files / dev screenshots — not source
 apps/patient-service/uploads/
 screenshots/
+.vercel
+.env*
