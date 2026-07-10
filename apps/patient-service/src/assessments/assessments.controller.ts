@@ -70,6 +70,14 @@ export class AssessmentsController {
     return this.assessmentsService.findAllForAdmin(limit ? Number(limit) : undefined);
   }
 
+  // GET /assessments/mine — ผลประเมินทั้งหมดของผู้ใช้ (หมอ: เคสที่ตัวเองสร้าง / ผู้ปกครอง: ของลูกทุกคน)
+  // ใช้กับหน้า Dashboard แทนการยิง child/:id ทีละคน (N+1) — ต้องประกาศก่อน ':id' ไม่งั้นโดน route จับเป็น id
+  @Get('mine')
+  findMine(@Request() req: any) {
+    const user = getRequestUser(req);
+    return this.assessmentsService.findMine(user);
+  }
+
   // GET /assessments/child/:childId — ดูประวัติของเด็ก (แพทย์เจ้าของเคส / ผู้ปกครองของเด็ก)
   @Get('child/:childId')
   findByChild(@Param('childId') childId: string, @Request() req: any) {

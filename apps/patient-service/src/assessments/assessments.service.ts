@@ -130,6 +130,26 @@ export class AssessmentsService {
     return { message: 'marked as failed' };
   }
 
+  // ผลประเมินทั้งหมดของผู้ใช้ในครั้งเดียว (หมอ: where doctorId / ผู้ปกครอง: ของลูกทุกคน)
+  // สำหรับหน้า Dashboard ที่ใช้แค่สถานะ/ตัวเลข — ไม่เซ็นภาพ (เซ็น signed URL เป็นร้อยครั้งจะช้ากว่าที่ประหยัดได้)
+  async findMine(user: RequestUser) {
+    let rows: Assessment[];
+    if (user.role === 'doctor') {
+      rows = await this.assessmentRepo.find({
+        where: { doctorId: user.userId },
+        order: { createdAt: 'DESC' },
+      });
+    } else {
+      const kids = await this.childRepo.find({ where: { parentId: user.userId } });
+      if (kids.length === 0) return [];
+      rows = await this.assessmentRepo.find({
+        where: { childId: In(kids.map((k) => k.id)) },
+        order: { createdAt: 'DESC' },
+      });
+    }
+    return rows.map((r) => ({ ...r, xrayImageUrl: null, heatmapUrl: null }));
+  }
+
   // ดูผลการประเมินทั้งหมดของเด็กคนนึง — เช็คสิทธิ์ก่อน
   async findByChildAuthorized(childId: string, user: RequestUser) {
     await this.assertChildAccess(childId, user);
