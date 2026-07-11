@@ -549,7 +549,7 @@ graph TD
 
 - [ ] **เปลี่ยน secret ทุกตัว** — `JWT_SECRET` และ `INTERNAL_SECRET` ต้องสุ่มยาว ๆ ใหม่ (ห้ามใช้ค่าตอน dev เด็ดขาด และห้ามอยู่ใน git)
 - [x] **CORS** — ✅ ตั้งแล้ว: `WEB_ORIGIN=https://totan-nsc2026-web.vercel.app` บน gateway
-- [ ] **อีเมล** — Gmail SMTP เหมาะแค่ demo ส่งเยอะ ๆ จะโดนบล็อก → เปลี่ยนเป็นบริการส่งเมลจริงเช่น **Resend** หรือ **Brevo** (มี free tier)
+- [x] **อีเมล** — ✅ production ส่งผ่าน **Brevo HTTP API** แล้ว (`BREVO_API_KEY` — Railway บล็อก outbound SMTP จึงใช้ API ผ่าน 443) · ส่วน dev ในเครื่องยัง fallback เป็น Gmail SMTP ซึ่ง app password เดิมหมดอายุ — จะทดสอบเมลใน dev ให้เพิ่ม `BREVO_API_KEY` ใน `.env` ของ notify-service หรืออัปเดต app password ใหม่
 - [ ] **Backup ฐานข้อมูล** — เปิด automated backup ของ Railway (ข้อมูลคนไข้หายคือหายจริง)
 - [ ] **ระบบแจ้ง error** — ต่อ **Sentry** (ฟรี) จะได้รู้ทันทีเวลาระบบพังโดยไม่ต้องนั่งเฝ้า log
 - [ ] **Patient service ห้ามหลับ** — ตัวเตือนวันนัด (scheduler ทุก 12 ชม.) อยู่ใน patient-service ถ้าใช้ plan ที่ service หลับได้ ตัวเตือนจะไม่ทำงาน
