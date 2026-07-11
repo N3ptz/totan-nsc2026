@@ -157,7 +157,7 @@ export default function PatientDetailPage() {
   const simulate = async (assessmentId: string) => {
     setSimulating(assessmentId);
     try {
-      await assessmentsApi.mockAiResult(assessmentId);
+      await assessmentsApi.retryAi(assessmentId);
       pollAssessment(assessmentId, () => { if (alive.current) setSimulating(null); });
     } catch {
       const { data: refreshed } = await assessmentsApi.listByChild(id).catch(() => ({ data: null }));
@@ -249,7 +249,8 @@ export default function PatientDetailPage() {
               icon="🔬" color="primary"
               label={th ? "การประเมินทั้งหมด" : "Total Assessments"}
               value={String(assessments.length)}
-              sub={assessments.filter(a => a.status === "completed").length + (th ? " เสร็จสิ้น" : " completed")}
+              // นับสถานะเป็นมุมมองการทำงานของแพทย์ — ผู้ปกครองเห็นเฉพาะผลที่แพทย์ส่งแล้ว (เสร็จสิ้นเสมอ)
+              sub={isDoctor ? assessments.filter(a => a.status === "completed").length + (th ? " เสร็จสิ้น" : " completed") : ""}
             />
             <StatCard
               icon="🦴" color="accent"

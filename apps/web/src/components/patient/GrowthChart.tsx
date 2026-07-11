@@ -142,7 +142,7 @@ export function GrowthChart({
         <div className="w-6 h-0.5 rounded-full" style={{ background: "rgb(var(--primary))" }} />
         <div className="w-1.5 h-1.5 rounded-full" style={{ background: "rgb(var(--primary))" }} />
         <span className="font-body text-xs font-semibold" style={{ color: "rgb(var(--primary))" }}>
-          {th ? "ส่วนสูงจริง (ซม.)" : "Actual Height (cm)"}
+          {th ? "ส่วนสูงจริง (cm)" : "Actual Height (cm)"}
         </span>
         {isSingle && (
           <span className="font-body text-[10px] text-muted">
@@ -152,7 +152,7 @@ export function GrowthChart({
       </div>
 
       <ResponsiveContainer width="100%" height={200}>
-        <AreaChart data={data} margin={{ top: 8, right: 12, left: -14, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
           <defs>
             <linearGradient id="growthChartGrad" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="rgb(var(--primary))" stopOpacity={0.22} />
@@ -160,11 +160,11 @@ export function GrowthChart({
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 4" stroke="rgb(var(--border))" strokeOpacity={0.4} />
-          <XAxis dataKey="ageYears" tickFormatter={v => th ? `${v}ปี` : `${v}y`}
-            tick={{ fontSize: 9, fill: "rgb(var(--muted))", fontFamily: "inherit" }}
+          <XAxis dataKey="ageYears" tickFormatter={v => th ? `${v} ปี` : `${v}y`}
+            tick={{ fontSize: 11, fill: "rgb(var(--muted))", fontFamily: "inherit" }}
             axisLine={false} tickLine={false} />
-          <YAxis unit=" cm" tick={{ fontSize: 9, fill: "rgb(var(--muted))", fontFamily: "inherit" }}
-            axisLine={false} tickLine={false} domain={["auto", "auto"]} width={44} />
+          <YAxis unit=" cm" tick={{ fontSize: 11, fill: "rgb(var(--muted))", fontFamily: "inherit" }}
+            axisLine={false} tickLine={false} domain={["auto", "auto"]} width={52} />
           <Tooltip content={<GrowthTooltip th={th} />} cursor={{ stroke: "rgb(var(--border))", strokeWidth: 1 }} />
 
           <Area dataKey="p97" type="monotone" stroke="rgb(var(--border))" strokeWidth={1} strokeDasharray="4 3" fill="transparent" dot={false} />
@@ -183,15 +183,15 @@ export function GrowthChart({
       <div className="flex items-center gap-4 flex-wrap px-1">
         <div className="flex items-center gap-1.5">
           <div className="w-5 h-0.5 rounded-full" style={{ background: "rgb(var(--primary))" }} />
-          <span className="font-body text-[10px] text-muted">{th ? "ส่วนสูงจริง" : "Actual Height"}</span>
+          <span className="font-body text-xs text-muted">{th ? "ส่วนสูงจริง" : "Actual Height"}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-4 border-t border-dashed border-muted/60" />
-          <span className="font-body text-[10px] text-muted">{th ? "ค่ากลาง P50" : "P50 median"}</span>
+          <span className="font-body text-xs text-muted">{th ? "ค่ากลาง P50" : "P50 median"}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="w-4 border-t border-dashed border-border" />
-          <span className="font-body text-[10px] text-muted">{th ? "ช่วง P3/P97" : "P3 / P97 range"}</span>
+          <span className="font-body text-xs text-muted">{th ? "ช่วง P3/P97" : "P3 / P97 range"}</span>
         </div>
       </div>
     </div>

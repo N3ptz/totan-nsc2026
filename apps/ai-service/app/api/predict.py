@@ -61,15 +61,12 @@ async def _process_and_callback(req: PredictRequest) -> None:
     4. POST result กลับ patient-service /assessments/:id/ai-result
     """
     try:
-        # 1. Download X-ray (mock mode ไม่ใช้ image_bytes — ไม่ block pipeline ถ้า URL ใช้ไม่ได้)
-        image_bytes = b""
-        try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(req.xrayImageUrl)
-                resp.raise_for_status()
-                image_bytes = resp.content
-        except Exception as dl_exc:
-            logger.warning(f"Image download skipped [{req.assessmentId}]: {dl_exc}")
+        # 1. Download X-ray — โมเดลต้องใช้ภาพจริงเสมอ (ไม่มี mock ให้ข้ามได้แล้ว)
+        #    ดาวน์โหลดไม่ได้ = pipeline ล้มเหลว → except ด้านล่าง report เป็น FAILED
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(req.xrayImageUrl)
+            resp.raise_for_status()
+            image_bytes = resp.content
 
         # 2. Pipeline — offloaded to a thread since the external model call
         #    is a blocking network request that could take seconds; running

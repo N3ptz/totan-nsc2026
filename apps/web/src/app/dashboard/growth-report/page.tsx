@@ -7,6 +7,7 @@ import {
   ReferenceLine, Cell, PolarAngleAxis,
 } from "recharts";
 import { childrenApi, assessmentsApi, type Child, type Assessment } from "@/lib/api";
+import { useUser } from "@/lib/user";
 import { fmtYearsMonths } from "@/components/patient/utils";
 
 // ── WHO reference (P3 / P50 / P97, age 2–13) ────────────────────────────────
@@ -149,6 +150,8 @@ function Spinner() {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function GrowthReportPage() {
+  const { user } = useUser();
+  const isDoctor = user?.role === "doctor"; // ป้าย Simulated/ค่า confidence เป็นข้อมูลภายใน — ซ่อนจากผู้ปกครอง
   const [children, setChildren]           = useState<Child[]>([]);
   const [selectedId, setSelectedId]       = useState<string>("");
   const [assessments, setAssessments]     = useState<Assessment[]>([]);
@@ -320,7 +323,7 @@ export default function GrowthReportPage() {
                       <span className={`text-[11px] font-body font-semibold px-2.5 py-1 rounded-full ${risk.cls}`}>
                         {risk.label}
                       </span>
-                      {latest?.isMock && (
+                      {isDoctor && latest?.isMock && (
                         <span className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-warning/10 text-warning">
                           Simulated
                         </span>
@@ -567,8 +570,8 @@ export default function GrowthReportPage() {
                           </div>
                         </div>
 
-                        {/* Confidence bar */}
-                        {latest?.confidence != null && (
+                        {/* Confidence bar — ข้อมูลภายในของแพทย์ */}
+                        {isDoctor && latest?.confidence != null && (
                           <div className="w-full space-y-2 mt-1">
                             <div className="flex items-center justify-between font-body text-xs">
                               <span className="text-muted">AI Confidence</span>
@@ -684,7 +687,7 @@ export default function GrowthReportPage() {
                             </span>
                           </div>
                         )}
-                        {latest.confidence != null && (
+                        {isDoctor && latest.confidence != null && (
                           <div className="flex items-center justify-between">
                             <span className="font-body text-xs text-muted">Confidence</span>
                             <span className="font-body text-xs font-bold text-ink">{Math.round(Number(latest.confidence) * 100)}%</span>

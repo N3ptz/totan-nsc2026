@@ -1,5 +1,4 @@
 import math
-import random
 import logging
 from datetime import datetime
 
@@ -34,7 +33,7 @@ class BoneAgePipeline:
        - ตั้ง self._loaded = True เมื่อโหลดสำเร็จ
 
     2. run()
-       - แทนที่ _mock_run() ด้วย pipeline จริง
+       - แทนที่ _external_run() ด้วย pipeline จริง
        - อัปโหลด heatmap → object storage → ใส่ URL ใน heatmapUrl
     ────────────────────────────────────────────────────────────────────
     """
@@ -55,7 +54,7 @@ class BoneAgePipeline:
         # self.detector  = torch.load(f"{self.model_dir}/yolov11.pt",   map_location=self.device)
         # self.regressor = torch.load(f"{self.model_dir}/convnext_tiny.pt", map_location=self.device)
         # self._loaded = True
-        logger.warning("Model weights not loaded — mock mode active")
+        logger.warning("Model weights not loaded — using external demo model (failures return AI error, no mock fallback)")
 
     def run(
         self,
@@ -81,38 +80,32 @@ class BoneAgePipeline:
                       — heightPercentile, heightSdScore, bmi, bmiPercentile, riskFlag
         """
         if not self._loaded:
-            return self._external_or_mock_run(
+            return self._external_run(
                 image_bytes, sex, height_cm, weight_kg, father_height_cm, mother_height_cm, date_of_birth
             )
 
         # TODO: real in-house pipeline goes here
         raise NotImplementedError("In-house pipeline not implemented yet")
 
-    # ─── External demo model, with mock fallback (ใช้เมื่อ weights ยังไม่ load) ──
+    # ─── External demo model (ใช้เมื่อ weights ยังไม่ load) ──────────────────
+    # ไม่มี mock fallback แล้ว — ถ้า external model ใช้ไม่ได้ให้ raise ออกไป
+    # caller (predict.py) จะ report ai-failed → assessment เป็น FAILED ให้แพทย์กดวิเคราะห์ใหม่
+    # ดีกว่าคืนตัวเลขสุ่มที่ดูเหมือนผลจริงในระบบการแพทย์
 
-    def _get_bone_age(
-        self, image_bytes: bytes, sex: str, chron_age_months: int,
-    ) -> tuple[float, float, bytes | None, bool, str]:
+    def _get_bone_age(self, image_bytes: bytes, sex: str) -> tuple[float, float, bytes | None]:
         """
-        Returns (bone_age_months, confidence, heatmap_bytes, is_mock, ai_provider).
+        Returns (bone_age_months, confidence, heatmap_bytes).
 
-        Tries the external HF Space demo first (see external_bone_age.py for
-        the "experimental, unvalidated" caveat); falls back to the random-jitter
-        mock on any failure (network, cold-start timeout, bad response) so a
-        flaky third-party call never leaves an assessment stuck processing.
+        Calls the external HF Space demo (see external_bone_age.py for the
+        "experimental, unvalidated" caveat). Any failure (missing image,
+        network, cold-start timeout, bad response) raises — the pipeline
+        reports the assessment as FAILED instead of fabricating a result.
         """
-        if image_bytes:
-            try:
-                ext = predict_external(image_bytes, sex)
-                confidence = self._confidence_from_sd(ext["sd_months"])
-                return ext["bone_age_months"], confidence, ext["heatmap_bytes"], False, "external_demo"
-            except Exception as exc:
-                logger.warning(f"External bone-age model failed, falling back to mock: {exc}")
-
-        deviation = round((random.random() - 0.5) * 16)
-        bone_age_months = max(6, chron_age_months + deviation)
-        confidence = round((0.82 + random.random() * 0.14) * 1000) / 1000
-        return float(bone_age_months), confidence, None, True, "mock"
+        if not image_bytes:
+            raise ValueError("no X-ray image bytes — cannot run bone age model")
+        ext = predict_external(image_bytes, sex)
+        confidence = self._confidence_from_sd(ext["sd_months"])
+        return ext["bone_age_months"], confidence, ext["heatmap_bytes"]
 
     @staticmethod
     def _confidence_from_sd(sd_months: float) -> float:
@@ -126,7 +119,7 @@ class BoneAgePipeline:
         """
         return round(max(0.05, min(0.99, 1 - sd_months / 24)), 3)
 
-    def _external_or_mock_run(
+    def _external_run(
         self,
         image_bytes: bytes,
         sex: str,
@@ -138,9 +131,7 @@ class BoneAgePipeline:
     ) -> AiResult:
         chron_age_months = self._chron_age_months(date_of_birth)
 
-        bone_age_months, confidence, heatmap_bytes, is_mock, ai_provider = self._get_bone_age(
-            image_bytes, sex, chron_age_months
-        )
+        bone_age_months, confidence, heatmap_bytes = self._get_bone_age(image_bytes, sex)
         deviation = round(bone_age_months - chron_age_months)
 
         risk_flag = self._classify_deviation(deviation)
@@ -154,10 +145,10 @@ class BoneAgePipeline:
 
         bmi, bmi_percentile = self._bmi_stats(height_cm, weight_kg, sex, chron_age_months)
 
+        # WHO ไม่นิยาม weight-for-age เกิน 10 ขวบ — ปล่อยเป็น None ให้ UI แสดง "—"
+        # (ห้ามสุ่มค่า percentile ในระบบการแพทย์)
         _, weight_percentile = weight_zscore_percentile(sex, chron_age_months, weight_kg) \
             if weight_kg else (None, None)
-        if weight_percentile is None and weight_kg:
-            weight_percentile = round(30 + random.random() * 40)
 
         return AiResult(
             boneAgeMonths=float(bone_age_months),
@@ -172,8 +163,8 @@ class BoneAgePipeline:
             bmiPercentile=bmi_percentile,
             heightSdScore=height_sd_score,
             riskFlag=risk_flag,
-            isMock=is_mock,        # True = ผลจำลอง (random jitter) — ทั้ง external call ล้มเหลวหรือไม่ก็ตาม
-            aiProvider=ai_provider,  # mock | external_demo — UI ใช้บอกว่าผลนี้มาจากไหน
+            isMock=False,              # ไม่มี mock pipeline แล้ว — ล้มเหลว = FAILED ไม่ใช่ผลจำลอง
+            aiProvider="external_demo",  # UI ใช้บอกว่าผลมาจากโมเดลทดลอง (ยังไม่ validate ทางคลินิก)
         )
 
     @staticmethod
@@ -275,9 +266,8 @@ class BoneAgePipeline:
         if not height_cm or not weight_kg or height_cm <= 0 or weight_kg <= 0:
             return None, None
         bmi = round((weight_kg / ((height_cm / 100) ** 2)) * 10) / 10
+        # นอกช่วงตาราง LMS → None ให้ UI แสดง "—" (ห้ามสุ่มค่าแทน)
         _, bmi_percentile = bmi_zscore_percentile(sex, age_months, bmi)
-        if bmi_percentile is None:
-            bmi_percentile = round(40 + random.random() * 30)  # fallback
         return bmi, bmi_percentile
 
 

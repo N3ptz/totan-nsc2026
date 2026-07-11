@@ -22,6 +22,17 @@ export function AssessmentDetailPanel({
     ? classifyFahVsTargetHeight(Number(assessment.finalAdultHeightCm), Number(assessment.targetHeightCm))
     : null;
 
+  // ค่าดิบจาก AI เทียบค่าที่แพทย์ปรับ — โชว์เฉพาะ field ที่ต่างกันจริง (ฝั่งแพทย์เท่านั้น)
+  const edited = !!assessment.resultEditedAt;
+  const aiDiff = {
+    boneAge: edited && assessment.aiBoneAgeMonths != null
+      && Math.round(Number(assessment.aiBoneAgeMonths)) !== Math.round(Number(assessment.boneAgeMonths ?? NaN)),
+    fah: edited && assessment.aiFinalAdultHeightCm != null
+      && Number(assessment.aiFinalAdultHeightCm) !== Number(assessment.finalAdultHeightCm ?? NaN),
+    risk: edited && !!assessment.aiRiskFlag && assessment.aiRiskFlag !== assessment.riskFlag,
+  };
+  const anyAiDiff = aiDiff.boneAge || aiDiff.fah || aiDiff.risk;
+
   const completed = assessment.status === "completed";
   const [notifiedAt, setNotifiedAt] = useState<string | null>(assessment.parentNotifiedAt ?? null);
   const [editing, setEditing] = useState(!assessment.parentNotifiedAt);
@@ -33,11 +44,75 @@ export function AssessmentDetailPanel({
   const [sending, setSending] = useState(false);
   const [sendStatus, setSendStatus] = useState<"idle" | "sent" | "error">("idle");
 
+  // ── แพทย์ตรวจทาน/ปรับผล AI ก่อนส่งให้ผู้ปกครอง ──
+  const [editingResult, setEditingResult] = useState(false);
+  const [baYears, setBaYears] = useState("");
+  const [baMonthsRem, setBaMonthsRem] = useState("");
+  const [fah, setFah] = useState("");
+  const [risk, setRisk] = useState("");
+  const [savingResult, setSavingResult] = useState(false);
+  const [resultStatus, setResultStatus] = useState<"idle" | "saved" | "error">("idle");
+  const [resultErrMsg, setResultErrMsg] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+
   useEffect(() => {
     if (sendStatus !== "sent") return;
     const t = setTimeout(() => setSendStatus("idle"), 3000);
     return () => clearTimeout(t);
   }, [sendStatus]);
+
+  useEffect(() => {
+    if (resultStatus !== "saved") return;
+    const t = setTimeout(() => setResultStatus("idle"), 3000);
+    return () => clearTimeout(t);
+  }, [resultStatus]);
+
+  const openResultEditor = () => {
+    const m = Math.round(Number(assessment.boneAgeMonths ?? 0));
+    setBaYears(String(Math.floor(m / 12)));
+    setBaMonthsRem(String(m % 12));
+    setFah(assessment.finalAdultHeightCm ? String(assessment.finalAdultHeightCm) : "");
+    setRisk(assessment.riskFlag ?? "");
+    setResultStatus("idle");
+    setEditingResult(true);
+  };
+
+  const saveResult = async () => {
+    const months = (Number(baYears) || 0) * 12 + (Number(baMonthsRem) || 0);
+    setSavingResult(true); setResultStatus("idle"); setResultErrMsg(null);
+    try {
+      const { data } = await assessmentsApi.updateResult(assessment.id, {
+        boneAgeMonths: months,
+        ...(fah ? { finalAdultHeightCm: Number(fah) } : {}),
+        ...(risk ? { riskFlag: risk as Assessment["riskFlag"] } : {}),
+      });
+      setEditingResult(false);
+      setResultStatus("saved");
+      if (data) onUpdated?.(data);
+    } catch (e: any) {
+      // โชว์สาเหตุจริงจาก server (เช่น validation ช่วงค่า) — ไม่งั้นแพทย์เดาไม่ถูกว่าพลาดตรงไหน
+      const msg = e?.response?.data?.message;
+      setResultErrMsg(Array.isArray(msg) ? msg.join(" · ") : msg || null);
+      setResultStatus("error");
+    } finally {
+      setSavingResult(false);
+    }
+  };
+
+  // แพทย์เห็นด้วยกับผล AI — ยืนยันตามเดิมโดยไม่แก้ค่า (ติดป้าย "แพทย์ตรวจสอบแล้ว")
+  const confirmReview = async () => {
+    setReviewing(true); setResultStatus("idle"); setResultErrMsg(null);
+    try {
+      const { data } = await assessmentsApi.markReviewed(assessment.id);
+      if (data) onUpdated?.(data);
+    } catch (e: any) {
+      const msg = e?.response?.data?.message;
+      setResultErrMsg(Array.isArray(msg) ? msg.join(" · ") : msg || null);
+      setResultStatus("error");
+    } finally {
+      setReviewing(false);
+    }
+  };
 
   const fmtSentAt = (s: string) =>
     new Date(s).toLocaleString(th ? "th-TH" : "en-US", {
@@ -64,13 +139,16 @@ export function AssessmentDetailPanel({
     }
   };
 
-  const rows: { label: string; value: string; highlight?: boolean }[] = [
+  const rows: { label: string; value: string; highlight?: boolean; sub?: string }[] = [
     { label: th ? "อายุกระดูก" : "Bone Age",
-      value: fmtYearsMonths(boneAge, th), highlight: true },
+      value: fmtYearsMonths(boneAge, th), highlight: true,
+      sub: isDoctor && aiDiff.boneAge
+        ? `${th ? "AI ให้" : "AI"}: ${fmtYearsMonths(Number(assessment.aiBoneAgeMonths), th)}` : undefined },
     { label: th ? "ส่วนเบี่ยงเบน" : "Deviation",
       value: `${deviation >= 0 ? "+" : ""}${Math.round(deviation)} ${th ? "เดือน" : "mo"}` },
     { label: th ? "ความมั่นใจ AI" : "AI Confidence",
-      value: assessment.confidence ? `${Math.round(Number(assessment.confidence) * 100)}%` : "—" },
+      // ตัวเลขความมั่นใจของโมเดลเป็นข้อมูลภายในสำหรับแพทย์ — ค่า "—" จะถูกกรองออกจากตาราง
+      value: isDoctor && assessment.confidence ? `${Math.round(Number(assessment.confidence) * 100)}%` : "—" },
     { label: th ? "ส่วนสูง" : "Height",
       value: assessment.heightCm ? `${assessment.heightCm} cm` : "—" },
     { label: th ? "น้ำหนัก" : "Weight",
@@ -86,7 +164,9 @@ export function AssessmentDetailPanel({
     { label: "Height SD (Z-score)",
       value: assessment.heightSdScore ? `${Number(assessment.heightSdScore) >= 0 ? "+" : ""}${assessment.heightSdScore}` : "—" },
     { label: th ? "ส่วนสูงที่AIพยากรณ์ (FAH)" : "Final Adult Height",
-      value: assessment.finalAdultHeightCm ? `${assessment.finalAdultHeightCm} cm` : "—", highlight: true },
+      value: assessment.finalAdultHeightCm ? `${assessment.finalAdultHeightCm} cm` : "—", highlight: true,
+      sub: isDoctor && aiDiff.fah
+        ? `${th ? "AI ให้" : "AI"}: ${assessment.aiFinalAdultHeightCm} cm` : undefined },
     { label: th ? "ส่วนสูงเป้าหมาย (TH)" : "Target Height",
       value: assessment.targetHeightCm ? `${assessment.targetHeightCm} cm` : "—" },
   ];
@@ -97,6 +177,7 @@ export function AssessmentDetailPanel({
       <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-full sm:max-w-lg glass-strong border-l border-border/60 flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-border/50 flex-shrink-0">
           <button onClick={onClose}
+            data-tour="panel-close"
             aria-label={lang === "th" ? "ปิดรายละเอียด" : "Close detail panel"}
             className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-ink hover:bg-border/40 transition-all">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -111,24 +192,32 @@ export function AssessmentDetailPanel({
               {new Date(assessment.createdAt).toLocaleDateString(th ? "th-TH" : "en-US", { year: "numeric", month: "long", day: "numeric" })}
             </p>
           </div>
-          {assessment.isMock && (
+          {/* ป้ายสถานะระบบ (mock/experimental/ปรับผล) เป็นเรื่องภายใน — เห็นเฉพาะแพทย์ */}
+          {isDoctor && assessment.isMock && (
             <span className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-warning/10 text-warning flex-shrink-0">
               {th ? "ผลจำลอง" : "Simulated"}
-            </span>
-          )}
-          {!assessment.isMock && assessment.aiProvider === "external_demo" && (
-            <span
-              className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-accent/10 text-accent flex-shrink-0"
-              title={th
-                ? "อายุกระดูกมาจากโมเดล AI ของทีม (เวอร์ชันทดลอง) ยังไม่ผ่านการตรวจสอบความแม่นยำทางคลินิก"
-                : "Bone age from the team's experimental AI model, not yet clinically validated"}
-            >
-              {th ? "AI ทดลอง" : "Experimental AI"}
             </span>
           )}
           {assessment.riskFlag && RISK_LABEL[assessment.riskFlag] && (
             <span className={`text-[11px] font-body font-semibold px-2.5 py-1 rounded-full ${RISK_LABEL[assessment.riskFlag].cls} flex-shrink-0`}>
               {th ? RISK_LABEL[assessment.riskFlag].th : RISK_LABEL[assessment.riskFlag].en}
+            </span>
+          )}
+          {/* สถานะการรีวิวของแพทย์ (โชว์ทุกคน) — รีวิวแล้วติด "ตรวจสอบแล้ว" เสมอ, มีแก้ค่าติด "ปรับผลแล้ว" เพิ่ม */}
+          {assessment.reviewedAt && (
+            <span
+              className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-success/10 text-success flex-shrink-0"
+              title={th ? "แพทย์ตรวจสอบผลนี้แล้ว" : "Result reviewed by the doctor"}
+            >
+              {th ? "แพทย์ตรวจสอบแล้ว" : "Doctor reviewed"}
+            </span>
+          )}
+          {assessment.resultEditedAt && (
+            <span
+              className="text-[11px] font-body font-semibold px-2.5 py-1 rounded-full bg-primary/10 text-primary flex-shrink-0"
+              title={th ? "แพทย์ตรวจทานและปรับผลจาก AI แล้ว" : "Values reviewed and adjusted by the doctor"}
+            >
+              {th ? "แพทย์ปรับผลแล้ว" : "Doctor adjusted"}
             </span>
           )}
         </div>
@@ -182,7 +271,7 @@ export function AssessmentDetailPanel({
                   style={{ background: hasHeatmap ? "black" : "linear-gradient(135deg,#0a0a14,#111)" }}>
                   {hasHeatmap ? (
                     <img src={assessment.heatmapUrl} alt="Heatmap" className="w-full h-full object-contain" />
-                  ) : assessment.isMock ? (
+                  ) : isDoctor && assessment.isMock ? (
                     <>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="w-24 h-24 rounded-full opacity-70"
@@ -220,8 +309,15 @@ export function AssessmentDetailPanel({
                 {rows.filter(r => r.value !== "—").map((row) => (
                   <div key={row.label} className="flex items-center justify-between px-4 py-2.5 hover:bg-primary/[0.02]">
                     <span className="font-body text-xs text-muted">{row.label}</span>
-                    <span className={`font-body text-sm font-semibold tabular-nums ${row.highlight ? "text-primary" : "text-ink"}`}>
-                      {row.value}
+                    <span className="text-right">
+                      <span className={`font-body text-sm font-semibold tabular-nums ${row.highlight ? "text-primary" : "text-ink"}`}>
+                        {row.value}
+                      </span>
+                      {row.sub && (
+                        <span className="block font-body text-[10px] text-muted line-through decoration-muted/50">
+                          {row.sub}
+                        </span>
+                      )}
                     </span>
                   </div>
                 ))}
@@ -287,8 +383,208 @@ export function AssessmentDetailPanel({
             </div>
           )}
 
+          {/* แพทย์ตรวจทาน/ปรับผล AI — ผู้ปกครองยังไม่เห็นผลจนกว่าแพทย์จะกดส่ง */}
+          {isDoctor && completed && (
+            <div data-tour="review-card" className="rounded-xl border border-border/40 p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                </svg>
+                <p className="font-body text-[11px] font-semibold text-muted uppercase tracking-wide">
+                  {th ? "ตรวจทาน / ปรับผล AI" : "Review / Adjust AI Result"}
+                </p>
+              </div>
+
+              {!editingResult ? (
+                <>
+                  <p className="font-body text-xs text-muted leading-relaxed">
+                    {th
+                      ? "ตรวจสอบผลจาก AI ก่อนส่งให้ผู้ปกครอง — หากไม่ตรงตามดุลยพินิจของแพทย์ สามารถปรับอายุกระดูก ส่วนสูงพยากรณ์ และการแปลผลได้"
+                      : "Review the AI result before sending — you can adjust the bone age, predicted adult height, and interpretation if they don't match your clinical judgment."}
+                  </p>
+                  {/* เทียบค่าดิบจาก AI กับค่าที่แพทย์ยืนยัน — โชว์เฉพาะ field ที่ต่างกัน */}
+                  {anyAiDiff && (
+                    <div className="rounded-lg border border-primary/20 bg-primary/[0.04] p-3 space-y-1.5">
+                      <p className="font-body text-[11px] font-semibold text-primary">
+                        {th ? "ค่าที่ปรับจากผล AI" : "Adjusted from AI result"}
+                      </p>
+                      {aiDiff.boneAge && (
+                        <p className="font-body text-[11px] text-muted">
+                          {th ? "อายุกระดูก: " : "Bone age: "}
+                          <span className="line-through decoration-muted/60">{fmtYearsMonths(Number(assessment.aiBoneAgeMonths), th)}</span>
+                          <span className="text-ink font-semibold"> → {fmtYearsMonths(boneAge, th)}</span>
+                        </p>
+                      )}
+                      {aiDiff.fah && (
+                        <p className="font-body text-[11px] text-muted">
+                          FAH: <span className="line-through decoration-muted/60">{assessment.aiFinalAdultHeightCm} cm</span>
+                          <span className="text-ink font-semibold"> → {assessment.finalAdultHeightCm} cm</span>
+                        </p>
+                      )}
+                      {aiDiff.risk && (
+                        <p className="font-body text-[11px] text-muted">
+                          {th ? "การแปลผล: " : "Interpretation: "}
+                          <span className="line-through decoration-muted/60">
+                            {(assessment.aiRiskFlag && RISK_LABEL[assessment.aiRiskFlag]) ? (th ? RISK_LABEL[assessment.aiRiskFlag].th : RISK_LABEL[assessment.aiRiskFlag].en) : assessment.aiRiskFlag}
+                          </span>
+                          <span className="text-ink font-semibold">
+                            {" → "}{(assessment.riskFlag && RISK_LABEL[assessment.riskFlag]) ? (th ? RISK_LABEL[assessment.riskFlag].th : RISK_LABEL[assessment.riskFlag].en) : assessment.riskFlag}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {/* สถานะการรีวิว — รีวิวแล้ว (ยืนยัน/ปรับ) หรือยังรอรีวิว */}
+                  {assessment.reviewedAt ? (
+                    <div className="rounded-lg border border-success/30 bg-success/5 p-3 space-y-1">
+                      <div className="flex items-center gap-2">
+                        <svg className="w-4 h-4 text-success flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                        </svg>
+                        <p className="font-body text-xs font-semibold text-success">
+                          {assessment.resultEditedAt
+                            ? (th ? "แพทย์รีวิวและปรับผลแล้ว" : "Reviewed & adjusted by doctor")
+                            : (th ? "แพทย์รีวิวและยืนยันผลแล้ว" : "Reviewed & confirmed by doctor")}
+                        </p>
+                      </div>
+                      <p className="font-body text-[11px] text-muted">
+                        {th ? "รีวิวล่าสุดเมื่อ " : "Last reviewed "}{fmtSentAt(assessment.reviewedAt)}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="font-body text-[11px] text-warning">
+                      {th
+                        ? "ผลนี้ยังไม่ผ่านการรีวิว — ยืนยันตามเดิมหรือปรับค่าก่อนส่งให้ผู้ปกครอง"
+                        : "Not reviewed yet — confirm as-is or adjust before sending to the parent."}
+                    </p>
+                  )}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      {resultStatus === "saved" && (
+                        <span className="font-body text-xs text-success">
+                          {th ? "✓ บันทึกผลที่ปรับแล้ว" : "✓ Adjusted result saved"}
+                        </span>
+                      )}
+                      {resultStatus === "error" && (
+                        <span className="font-body text-xs text-danger break-words">
+                          {resultErrMsg ?? (th ? "ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง" : "Action failed, please retry")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        data-tour="adjust-btn"
+                        onClick={openResultEditor}
+                        className="inline-flex items-center gap-1 text-[11px] font-body font-semibold px-3 py-1.5 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors">
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                        </svg>
+                        {th ? "ปรับผล" : "Adjust"}
+                      </button>
+                      {!assessment.reviewedAt && (
+                        <button
+                          data-tour="confirm-btn"
+                          onClick={confirmReview}
+                          disabled={reviewing}
+                          className="px-4 py-2 rounded-xl text-xs font-body font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-40 disabled:translate-y-0"
+                          style={{ background: "linear-gradient(120deg, rgb(var(--success)), rgb(var(--aurora-5)))" }}>
+                          {reviewing
+                            ? (th ? "กำลังยืนยัน..." : "Confirming...")
+                            : (th ? "✓ ยืนยันผลตามนี้" : "✓ Confirm as-is")}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {assessment.aiBoneAgeMonths != null && (
+                    <p className="font-body text-[11px] text-muted">
+                      {th ? "ค่าจาก AI: อายุกระดูก " : "AI values: bone age "}
+                      <span className="font-semibold text-ink">{fmtYearsMonths(Number(assessment.aiBoneAgeMonths), th)}</span>
+                      {assessment.aiFinalAdultHeightCm != null && (
+                        <> · FAH <span className="font-semibold text-ink">{assessment.aiFinalAdultHeightCm} cm</span></>
+                      )}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-body text-[11px] font-semibold text-ink">
+                        {th ? "อายุกระดูก — ปี" : "Bone age — years"}
+                      </label>
+                      <input
+                        type="number" min={0} max={25} value={baYears}
+                        onChange={(e) => setBaYears(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 font-body"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-body text-[11px] font-semibold text-ink">
+                        {th ? "อายุกระดูก — เดือน" : "Bone age — months"}
+                      </label>
+                      <input
+                        type="number" min={0} max={11} value={baMonthsRem}
+                        onChange={(e) => setBaMonthsRem(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 font-body"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="font-body text-[11px] font-semibold text-ink">
+                        {th ? "ส่วนสูงพยากรณ์ FAH (cm)" : "Final adult height (cm)"}
+                      </label>
+                      <input
+                        type="number" min={50} max={250} step="0.1" value={fah}
+                        onChange={(e) => setFah(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 font-body"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="font-body text-[11px] font-semibold text-ink">
+                        {th ? "การแปลผล" : "Interpretation"}
+                      </label>
+                      <select
+                        value={risk}
+                        onChange={(e) => setRisk(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-border bg-surface text-ink text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/15 font-body">
+                        <option value="">{th ? "— ไม่ระบุ —" : "— none —"}</option>
+                        {Object.entries(RISK_LABEL).map(([key, label]) => (
+                          <option key={key} value={key}>{th ? label.th : label.en}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      {resultStatus === "error" && (
+                        <span className="font-body text-xs text-danger break-words">
+                          {resultErrMsg ?? (th ? "บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง" : "Failed to save, please retry")}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { setEditingResult(false); setResultStatus("idle"); }}
+                        className="px-3 py-2 rounded-xl text-xs font-body font-semibold text-muted hover:text-ink hover:bg-border/40 transition-colors">
+                        {th ? "ยกเลิก" : "Cancel"}
+                      </button>
+                      <button
+                        onClick={saveResult}
+                        disabled={savingResult || (baYears === "" && baMonthsRem === "")}
+                        className="px-4 py-2 rounded-xl text-xs font-body font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-40 disabled:translate-y-0"
+                        style={{ background: "linear-gradient(120deg, rgb(var(--aurora-1)), rgb(var(--primary-dark)))" }}>
+                        {savingResult ? (th ? "กำลังบันทึก..." : "Saving...") : (th ? "บันทึกผลที่ปรับ" : "Save adjusted result")}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {isDoctor && (
-            <div className="rounded-xl border border-border/40 p-4 space-y-3">
+            <div data-tour="notify-card" className="rounded-xl border border-border/40 p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
@@ -344,8 +640,8 @@ export function AssessmentDetailPanel({
                   )}
                   <p className="font-body text-xs text-muted leading-relaxed">
                     {th
-                      ? "ระบบจะรวบรวมผลการประเมิน (อายุกระดูก ส่วนสูง การแปลผล) พร้อมวันนัดติดตาม ส่งเป็นอีเมล และบันทึกคำแนะนำให้ผู้ปกครองอ่านในแอป (เมนูคำแนะนำจากแพทย์)"
-                      : "The assessment summary and follow-up date are emailed to the parent, and your recommendation is saved to their app (Recommendations menu)."}
+                      ? "ผู้ปกครองจะยังไม่เห็นผลนี้ในแอปจนกว่าแพทย์จะกดส่ง — เมื่อส่งแล้วระบบจะรวบรวมผลการประเมิน (อายุกระดูก ส่วนสูง การแปลผล) พร้อมวันนัดติดตาม ส่งเป็นอีเมล เปิดให้เห็นผลในแอป และบันทึกคำแนะนำให้ผู้ปกครองอ่าน (เมนูคำแนะนำจากแพทย์)"
+                      : "The parent cannot see this result in their app until you send it — sending emails the assessment summary and follow-up date, unlocks the result in their app, and saves your recommendation (Recommendations menu)."}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">

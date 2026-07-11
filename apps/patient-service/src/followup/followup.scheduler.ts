@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import { Assessment } from '../assessments/assessment.entity';
 import { Child } from '../children/child.entity';
 import { RedisService } from '../redis/redis.service';
@@ -37,7 +37,9 @@ export class FollowupScheduler implements OnModuleInit, OnModuleDestroy {
   async checkDueFollowups() {
     const today = new Date().toISOString().slice(0, 10);
     const due = await this.assessmentRepo.find({
-      where: { nextFollowupDate: today as any },
+      // เตือนเฉพาะเคสที่แพทย์กดส่งผลให้ผู้ปกครองแล้ว — listener ฝั่ง notify ส่งเมลหาผู้ปกครองเท่านั้น
+      // ถ้าแพทย์แค่ตั้งวันนัดไว้เอง (ยังไม่ปล่อยผล) ผู้ปกครองต้องไม่ได้รับเมลถึงนัดที่ตัวเองไม่รู้จัก
+      where: { nextFollowupDate: today as any, parentNotifiedAt: Not(IsNull()) },
     });
 
     for (const a of due) {

@@ -41,29 +41,33 @@ export function AssessmentCard({
         </div>
 
         <div className="flex-1 min-w-0">
-          {/* Info badges row */}
+          {/* Info badges row — ป้ายสถานะระบบ (status/mock/experimental) เป็นเรื่องภายในของแพทย์
+              ผู้ปกครองเห็นเฉพาะการแปลผลทางการแพทย์ + วันที่ */}
           <div className="flex items-center gap-2 flex-wrap mb-1.5">
-            <span className={`inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full ${cfg.cls}`}>
-              {cfg.label}
-            </span>
+            {isDoctor && (
+              <span className={`inline-flex items-center gap-1 text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full ${cfg.cls}`}>
+                {cfg.label}
+              </span>
+            )}
             {risk && (
               <span className={`inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full ${risk.cls}`}>
                 {th ? risk.th : risk.en}
               </span>
             )}
-            {a.isMock && (
+            {isDoctor && a.isMock && (
               <span className="inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-warning/10 text-warning">
                 {th ? "ผลจำลอง" : "Simulated"}
               </span>
             )}
-            {!a.isMock && a.aiProvider === "external_demo" && (
-              <span
-                className="inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-accent/10 text-accent"
-                title={th
-                  ? "อายุกระดูกมาจากโมเดล AI ของทีม (เวอร์ชันทดลอง) ยังไม่ผ่านการตรวจสอบความแม่นยำทางคลินิก"
-                  : "Bone age from the team's experimental AI model, not yet clinically validated"}
-              >
-                {th ? "AI ทดลอง" : "Experimental AI"}
+            {/* สถานะการรีวิวของแพทย์ (โชว์ทุกคน) — รีวิวแล้วติด "ตรวจสอบแล้ว" เสมอ, มีแก้ค่าติด "ปรับผลแล้ว" เพิ่ม */}
+            {a.reviewedAt && (
+              <span className="inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-success/10 text-success">
+                {th ? "แพทย์ตรวจสอบแล้ว" : "Doctor reviewed"}
+              </span>
+            )}
+            {a.resultEditedAt && (
+              <span className="inline-flex items-center text-[11px] font-body font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                {th ? "แพทย์ปรับผลแล้ว" : "Doctor adjusted"}
               </span>
             )}
             <span className="font-body text-xs text-muted ml-auto flex-shrink-0">
@@ -80,9 +84,9 @@ export function AssessmentCard({
                   disabled={simulating === a.id}
                   className="inline-flex items-center gap-1.5 text-xs font-body font-semibold px-3.5 py-2 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors disabled:opacity-50">
                   {simulating === a.id ? (
-                    <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>{th ? "กำลัง..." : "Running..."}</>
+                    <><svg className="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>{th ? "กำลังวิเคราะห์..." : "Analysing..."}</>
                   ) : (
-                    <><span>🤖</span>{th ? "จำลอง AI" : "Simulate AI"}</>
+                    <><span>🤖</span>{th ? "วิเคราะห์ใหม่" : "Retry AI"}</>
                   )}
                 </button>
               )}
@@ -119,7 +123,7 @@ export function AssessmentCard({
               <MiniStat label={th ? "อายุกระดูก" : "Bone Age"}
                 value={fmtYearsMonths(a.boneAgeMonths, th)} />
             )}
-            {a.confidence && <MiniStat label={th ? "ความมั่นใจ AI" : "Confidence"} value={`${Math.round(Number(a.confidence) * 100)}%`} />}
+            {isDoctor && a.confidence && <MiniStat label={th ? "ความมั่นใจ AI" : "Confidence"} value={`${Math.round(Number(a.confidence) * 100)}%`} />}
             {a.heightPercentile && <MiniStat label="Percentile" value={`P${Math.round(Number(a.heightPercentile))}`} />}
             {a.finalAdultHeightCm && <MiniStat label={th ? "ส่วนสูงคาดการณ์" : "Pred. Ht."} value={`${a.finalAdultHeightCm} cm`} />}
           </div>

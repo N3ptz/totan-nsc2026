@@ -93,12 +93,21 @@ export const assessmentsApi = {
   setFollowup: (id: string, date: string, notes?: string) =>
     apiClient.patch(`/assessments/${id}/followup`, { date, notes }),
 
+  // แพทย์ปรับผล AI (อายุกระดูก/FAH/การแปลผล/โน้ต) ก่อนกดส่งให้ผู้ปกครอง
+  updateResult: (id: string, data: { boneAgeMonths?: number; finalAdultHeightCm?: number; riskFlag?: Assessment['riskFlag']; clinicalNotes?: string }) =>
+    apiClient.patch<Assessment>(`/assessments/${id}/result`, data),
+
+  // แพทย์ยืนยันผล AI ตามเดิมโดยไม่แก้ค่า — ติดป้าย "แพทย์ตรวจสอบแล้ว"
+  markReviewed: (id: string) =>
+    apiClient.post<Assessment>(`/assessments/${id}/review`, {}),
+
   // แพทย์ส่งผล + วันนัดติดตามให้ผู้ปกครอง (รวบรวมผลประเมิน → เมล)
   notifyParent: (id: string, data: { followUpDate: string; followUpTime?: string; note?: string }) =>
     apiClient.post<Assessment>(`/assessments/${id}/notify-parent`, data),
 
-  mockAiResult: (id: string) =>
-    apiClient.post<Assessment>(`/assessments/${id}/mock-ai`, {}),
+  // สั่งวิเคราะห์ AI ใหม่ (เคส pending ค้าง/failed) — เรียกโมเดลจริงเสมอ ไม่มี mock แล้ว
+  retryAi: (id: string) =>
+    apiClient.post<Assessment>(`/assessments/${id}/retry-ai`, {}),
 };
 
 // ── Admin (read-only) ─────────────────────────────────────
@@ -158,7 +167,13 @@ export interface Assessment {
   heightSdScore?: number;
   nextFollowupDate?: string;
   followupNotes?: string;
-  parentNotifiedAt?: string; // เวลาที่ส่งผลให้ผู้ปกครองล่าสุด (null = ยังไม่เคยส่ง)
+  parentNotifiedAt?: string; // เวลาที่ส่งผลให้ผู้ปกครองล่าสุด (null = ยังไม่เคยส่ง) — ผู้ปกครองเห็นเฉพาะผลที่ส่งแล้ว
+  resultEditedAt?: string; // เวลาที่แพทย์ปรับผล AI ล่าสุด (null = ผลตรงจาก AI ไม่เคยแก้)
+  reviewedAt?: string; // เวลาที่แพทย์รีวิวผลแล้ว (ยืนยันตามเดิมหรือปรับค่า) — null = ยังไม่ผ่านตาแพทย์
+  // ค่าดิบจาก AI (snapshot) — คอลัมน์หลักคือค่าที่ใช้จริงซึ่งแพทย์แก้ทับได้ ชุดนี้ไว้โชว์เทียบฝั่งแพทย์
+  aiBoneAgeMonths?: number | null;
+  aiFinalAdultHeightCm?: number | null;
+  aiRiskFlag?: string | null;
   clinicalNotes?: string;
   createdAt: string;
 }

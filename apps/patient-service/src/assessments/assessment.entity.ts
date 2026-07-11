@@ -92,8 +92,30 @@ export class Assessment {
   followupNotes: string;
 
   // เวลาที่แพทย์กดส่งผลให้ผู้ปกครองล่าสุด (null = ยังไม่เคยส่ง)
+  // สำคัญ: ใช้เป็นตัวกั้นการมองเห็นของผู้ปกครองด้วย — ผู้ปกครองเห็นผลเฉพาะ assessment ที่แพทย์กดส่งแล้ว
   @Column({ type: 'timestamptz', nullable: true })
   parentNotifiedAt: Date;
+
+  // เวลาที่แพทย์แก้ไขผล AI ล่าสุด (null = ยังไม่เคยแก้) — UI ใช้แสดงป้าย "แพทย์ปรับผลแล้ว"
+  @Column({ type: 'timestamptz', nullable: true })
+  resultEditedAt: Date;
+
+  // เวลาที่แพทย์รีวิวผลแล้ว (ยืนยันตามเดิมหรือปรับค่าก็ตาม) — ป้าย "แพทย์ตรวจสอบแล้ว"
+  // แยกจาก resultEditedAt เพราะรีวิวโดยไม่แก้ค่าก็ต้องบอกผู้ใช้ได้ว่าผ่านตาแพทย์แล้ว
+  @Column({ type: 'timestamptz', nullable: true })
+  reviewedAt: Date;
+
+  // ── ค่าดิบจาก AI (snapshot ตอน AI ตอบ) ─────────────────
+  // คอลัมน์หลัก (boneAgeMonths ฯลฯ) คือ "ค่าที่ใช้จริง" ซึ่งแพทย์แก้ทับได้ —
+  // ชุดนี้เก็บค่าดั้งเดิมจาก AI ไว้ให้ UI ฝั่งแพทย์โชว์เทียบ "AI ให้ → แพทย์ปรับเป็น"
+  @Column({ type: 'decimal', precision: 6, scale: 2, nullable: true, transformer: numericTransformer })
+  aiBoneAgeMonths: number;
+
+  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, transformer: numericTransformer })
+  aiFinalAdultHeightCm: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  aiRiskFlag: string;
 
   @Column({ type: 'text', nullable: true })
   clinicalNotes: string;

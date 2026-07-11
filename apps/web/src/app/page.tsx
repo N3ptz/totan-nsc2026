@@ -800,8 +800,8 @@ function StepScene({ i, th, tint }: { i: number; th: boolean; tint: string }) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div><Label>{th ? "ส่วนสูง (ซม.)" : "Height (cm)"}</Label><Field value="120.0" /></div>
-            <div><Label>{th ? "น้ำหนัก (กก.)" : "Weight (kg)"}</Label><Field value="25.0" /></div>
+            <div><Label>{th ? "ส่วนสูง (cm)" : "Height (cm)"}</Label><Field value="120.0" /></div>
+            <div><Label>{th ? "น้ำหนัก (kg)" : "Weight (kg)"}</Label><Field value="25.0" /></div>
           </div>
           {/* Submit button with light sweep */}
           <div className="relative mt-auto h-7 rounded-lg grid place-items-center overflow-hidden text-white font-body font-semibold shrink-0"
@@ -952,7 +952,7 @@ function ParentPreview({ th }: { th: boolean }) {
         <div className="rounded-xl p-2.5 text-center" style={{ background: "rgba(52,211,153,0.1)", border: "1px solid rgba(52,211,153,0.28)" }}>
           <div className="text-xl leading-none animate-float-soft">😊</div>
           <p className="font-display font-bold text-white text-[12px] mt-1">{th ? "การเติบโตปกติ" : "Growth on track"}</p>
-          <p className="font-body text-[9px] text-white/60 mt-0.5">{th ? "ส่วนสูงคาดการณ์ 172 ซม." : "Predicted height 172 cm"}</p>
+          <p className="font-body text-[9px] text-white/60 mt-0.5">{th ? "ส่วนสูงคาดการณ์ 172 cm" : "Predicted height 172 cm"}</p>
         </div>
         <div className="rounded-lg p-2 overflow-hidden" style={{ background: "rgba(56,189,248,0.08)" }}>
           {/* legend */}

@@ -144,14 +144,14 @@ export function ChildSettingsPanel({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "ส่วนสูง (ซม.)" : "Height (cm)"}
+                  {th ? "ส่วนสูง (cm)" : "Height (cm)"}
                 </label>
                 <input type="number" min="30" max="250" step="0.1"
                   value={form.heightCm} onChange={set("heightCm")} placeholder="120.0" className="input-base" />
               </div>
               <div>
                 <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "น้ำหนัก (กก.)" : "Weight (kg)"}
+                  {th ? "น้ำหนัก (kg)" : "Weight (kg)"}
                 </label>
                 <input type="number" min="1" max="200" step="0.1"
                   value={form.weightKg} onChange={set("weightKg")} placeholder="25.0" className="input-base" />
@@ -166,14 +166,14 @@ export function ChildSettingsPanel({
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "ส่วนสูงบิดา (ซม.)" : "Father Height (cm)"}
+                  {th ? "ส่วนสูงบิดา (cm)" : "Father Height (cm)"}
                 </label>
                 <input type="number" min="100" max="250" step="0.1"
                   value={form.fatherHeightCm} onChange={set("fatherHeightCm")} placeholder="170.0" className="input-base" />
               </div>
               <div>
                 <label className="block font-body text-xs font-semibold text-muted mb-1.5">
-                  {th ? "ส่วนสูงมารดา (ซม.)" : "Mother Height (cm)"}
+                  {th ? "ส่วนสูงมารดา (cm)" : "Mother Height (cm)"}
                 </label>
                 <input type="number" min="100" max="250" step="0.1"
                   value={form.motherHeightCm} onChange={set("motherHeightCm")} placeholder="158.0" className="input-base" />

@@ -46,7 +46,7 @@ const TIERS: Record<FahTargetCategory, {
   below_range: {
     label: { th: "ต่ำกว่าศักยภาพทางพันธุกรรมอย่างมีนัยสำคัญ", en: "Below Genetic Target Range" },
     advice: {
-      th: "ส่วนสูงที่คาดการณ์เมื่อโตเต็มวัยต่ำกว่าส่วนสูงเป้าหมายเกิน 8.5 ซม. (~2 SD) ซึ่งอยู่นอกช่วงที่คาดหวังสำหรับครอบครัวนี้ อาจบ่งชี้ว่าเด็กไม่ได้เติบโตเต็มศักยภาพทางพันธุกรรม จากสาเหตุ เช่น ภาวะทุพโภชนาการ ภาวะขาดฮอร์โมนการเจริญเติบโต ไทรอยด์ทำงานต่ำ หรือโรคเรื้อรัง ควรพิจารณาตรวจประเมินทางต่อมไร้ท่อเพิ่มเติม",
+      th: "ส่วนสูงที่คาดการณ์เมื่อโตเต็มวัยต่ำกว่าส่วนสูงเป้าหมายเกิน 8.5 cm (~2 SD) ซึ่งอยู่นอกช่วงที่คาดหวังสำหรับครอบครัวนี้ อาจบ่งชี้ว่าเด็กไม่ได้เติบโตเต็มศักยภาพทางพันธุกรรม จากสาเหตุ เช่น ภาวะทุพโภชนาการ ภาวะขาดฮอร์โมนการเจริญเติบโต ไทรอยด์ทำงานต่ำ หรือโรคเรื้อรัง ควรพิจารณาตรวจประเมินทางต่อมไร้ท่อเพิ่มเติม",
       en: "Predicted adult height is more than 8.5 cm (~2 SD) below the genetic target — outside the expected range for this family. This pattern can indicate the child is not reaching their genetic growth potential, possibly due to malnutrition, growth hormone deficiency, hypothyroidism, or chronic illness. Consider clinical correlation and further endocrine evaluation.",
     },
     cls: "bg-danger/10 text-danger",
@@ -54,7 +54,7 @@ const TIERS: Record<FahTargetCategory, {
   notable_below: {
     label: { th: "ต่ำกว่าส่วนสูงเป้าหมายอย่างเห็นได้ชัด", en: "Notably Below Target Height" },
     advice: {
-      th: "ส่วนสูงที่คาดการณ์ต่ำกว่าส่วนสูงเป้าหมาย 5-8.5 ซม. ซึ่งเกินเกณฑ์ 5 ซม. ที่ใช้พิจารณาทางคลินิก แต่ยังอยู่ในช่วงค่าปกติของประชากรสำหรับครอบครัวนี้ ควรติดตามผลในการนัดครั้งถัดไป โดยควรพิจารณาว่าค่าพยากรณ์เองมีความคลาดเคลื่อนโดยธรรมชาติราว 4-6 ซม. จึงไม่ควรตีความผลต่างในช่วงนี้เกินจริง",
+      th: "ส่วนสูงที่คาดการณ์ต่ำกว่าส่วนสูงเป้าหมาย 5-8.5 cm ซึ่งเกินเกณฑ์ 5 cm ที่ใช้พิจารณาทางคลินิก แต่ยังอยู่ในช่วงค่าปกติของประชากรสำหรับครอบครัวนี้ ควรติดตามผลในการนัดครั้งถัดไป โดยควรพิจารณาว่าค่าพยากรณ์เองมีความคลาดเคลื่อนโดยธรรมชาติราว 4-6 cm จึงไม่ควรตีความผลต่างในช่วงนี้เกินจริง",
       en: "Predicted adult height is 5-8.5 cm below the genetic target — outside the 5 cm clinical comfort zone, though still within the broader population range for this family. Worth monitoring at follow-up; note the prediction itself carries roughly 4-6 cm of inherent uncertainty, so a gap in this zone shouldn't be over-interpreted alone.",
     },
     cls: "bg-warning/10 text-warning",
@@ -62,7 +62,7 @@ const TIERS: Record<FahTargetCategory, {
   within_range: {
     label: { th: "อยู่ในช่วงศักยภาพทางพันธุกรรม", en: "Within Genetic Target Range" },
     advice: {
-      th: "ส่วนสูงที่คาดการณ์อยู่ในช่วง 5 ซม.ของส่วนสูงเป้าหมาย ซึ่งเหมาะสมกับศักยภาพทางพันธุกรรมของครอบครัวนี้",
+      th: "ส่วนสูงที่คาดการณ์อยู่ในช่วง 5 cm ของส่วนสูงเป้าหมาย ซึ่งเหมาะสมกับศักยภาพทางพันธุกรรมของครอบครัวนี้",
       en: "Predicted adult height is within 5 cm of the genetic target height — appropriate for this family's genetic potential.",
     },
     cls: "bg-success/10 text-success",
@@ -70,7 +70,7 @@ const TIERS: Record<FahTargetCategory, {
   notable_above: {
     label: { th: "สูงกว่าส่วนสูงเป้าหมายอย่างเห็นได้ชัด", en: "Notably Above Target Height" },
     advice: {
-      th: "ส่วนสูงที่คาดการณ์สูงกว่าส่วนสูงเป้าหมาย 5-8.5 ซม. ส่วนใหญ่มักสะท้อนถึงภาวะโภชนาการและสิ่งแวดล้อมที่ดี แต่บางครั้งอาจเกี่ยวข้องกับสาเหตุอื่น เช่น ภาวะเป็นหนุ่มสาวก่อนวัย ควรบันทึกไว้เพื่อติดตาม",
+      th: "ส่วนสูงที่คาดการณ์สูงกว่าส่วนสูงเป้าหมาย 5-8.5 cm ส่วนใหญ่มักสะท้อนถึงภาวะโภชนาการและสิ่งแวดล้อมที่ดี แต่บางครั้งอาจเกี่ยวข้องกับสาเหตุอื่น เช่น ภาวะเป็นหนุ่มสาวก่อนวัย ควรบันทึกไว้เพื่อติดตาม",
       en: "Predicted adult height is 5-8.5 cm above the genetic target. Often reflects favorable nutrition and environment, but can occasionally relate to other causes of growth advancement (e.g. early puberty) — worth noting rather than acting on alone.",
     },
     cls: "bg-primary/10 text-primary",
@@ -78,7 +78,7 @@ const TIERS: Record<FahTargetCategory, {
   above_range: {
     label: { th: "สูงกว่าศักยภาพทางพันธุกรรมอย่างมีนัยสำคัญ", en: "Above Genetic Target Range" },
     advice: {
-      th: "ส่วนสูงที่คาดการณ์สูงกว่าส่วนสูงเป้าหมายเกิน 8.5 ซม. (~2 SD) ซึ่งอยู่นอกช่วงที่คาดหวังสำหรับครอบครัวนี้ ส่วนใหญ่อธิบายได้จากภาวะโภชนาการและสิ่งแวดล้อมที่ดีเยี่ยม (เกินศักยภาพทางพันธุกรรม) แต่หากสูงกว่ามากอาจควรพิจารณาระยะพัฒนาการทางเพศหรือสาเหตุอื่นร่วมด้วย",
+      th: "ส่วนสูงที่คาดการณ์สูงกว่าส่วนสูงเป้าหมายเกิน 8.5 cm (~2 SD) ซึ่งอยู่นอกช่วงที่คาดหวังสำหรับครอบครัวนี้ ส่วนใหญ่อธิบายได้จากภาวะโภชนาการและสิ่งแวดล้อมที่ดีเยี่ยม (เกินศักยภาพทางพันธุกรรม) แต่หากสูงกว่ามากอาจควรพิจารณาระยะพัฒนาการทางเพศหรือสาเหตุอื่นร่วมด้วย",
       en: "Predicted adult height is more than 8.5 cm (~2 SD) above the genetic target — outside the expected range for this family. Most often explained by favorable nutrition and environmental factors (exceeding genetic potential), though marked advancement can occasionally warrant a look at pubertal timing or other causes of growth advancement.",
     },
     cls: "bg-primary/10 text-primary",

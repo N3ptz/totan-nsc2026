@@ -105,14 +105,14 @@ export function NewAssessmentPanel({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block font-body text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">
-                {th ? "ส่วนสูง (ซม.)" : "Height (cm)"}
+                {th ? "ส่วนสูง (cm)" : "Height (cm)"}
               </label>
               <input type="number" min="30" max="250" step="0.1" value={form.heightCm} onChange={set("heightCm")}
                 placeholder={child.heightCm ? String(child.heightCm) : "120.0"} className="input-base" />
             </div>
             <div>
               <label className="block font-body text-xs font-semibold text-muted mb-1.5 uppercase tracking-wide">
-                {th ? "น้ำหนัก (กก.)" : "Weight (kg)"}
+                {th ? "น้ำหนัก (kg)" : "Weight (kg)"}
               </label>
               <input type="number" min="1" max="200" step="0.1" value={form.weightKg} onChange={set("weightKg")}
                 placeholder={child.weightKg ? String(child.weightKg) : "25.0"} className="input-base" />

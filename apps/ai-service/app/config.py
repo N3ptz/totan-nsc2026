@@ -8,6 +8,10 @@ class Settings(BaseSettings):
     MODEL_DIR: str = "./models/weights"
     DEVICE: str = "cpu"
 
+    # HuggingFace token สำหรับเรียก HF Space ของทีม (external bone-age model)
+    # ว่าง = เรียกแบบ anonymous (โดน rate limit ง่ายกว่า)
+    HF_TOKEN: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

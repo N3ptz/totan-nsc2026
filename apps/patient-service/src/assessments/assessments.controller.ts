@@ -4,6 +4,7 @@ import { AssessmentsService } from './assessments.service';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import { AiResultDto } from './dto/ai-result.dto';
 import { NotifyParentDto } from './dto/notify-parent.dto';
+import { UpdateResultDto } from './dto/update-result.dto';
 import { StorageService } from '../storage/storage.service';
 import { InternalGuard } from '../common/internal.guard';
 import { getRequestUser, requireDoctor } from '../common/request-user';
@@ -92,11 +93,30 @@ export class AssessmentsController {
     return this.assessmentsService.findOneAuthorized(id, user);
   }
 
-  // POST /assessments/:id/mock-ai — จำลองผล AI (เฉพาะแพทย์เจ้าของเคส, demo only)
-  @Post(':id/mock-ai')
-  mockAi(@Param('id') id: string, @Request() req: any) {
+  // POST /assessments/:id/retry-ai — สั่งวิเคราะห์ AI ใหม่ (เฉพาะแพทย์เจ้าของเคส)
+  // ใช้กับเคสที่ pending ค้างหรือ failed — ไม่มี mock แล้ว เรียก AI service จริงเสมอ
+  @Post(':id/retry-ai')
+  retryAi(@Param('id') id: string, @Request() req: any) {
     const { userId } = requireDoctor(req);
-    return this.assessmentsService.mockAiResult(id, userId);
+    return this.assessmentsService.retryAi(id, userId);
+  }
+
+  // POST /assessments/:id/review — แพทย์ยืนยันผล AI ตามเดิมโดยไม่แก้ค่า (เฉพาะแพทย์เจ้าของเคส)
+  @Post(':id/review')
+  markReviewed(@Param('id') id: string, @Request() req: any) {
+    const { userId } = requireDoctor(req);
+    return this.assessmentsService.markReviewed(id, userId);
+  }
+
+  // PATCH /assessments/:id/result — แพทย์ปรับผล AI ก่อนส่งให้ผู้ปกครอง (เฉพาะแพทย์เจ้าของเคส)
+  @Patch(':id/result')
+  updateResult(
+    @Param('id') id: string,
+    @Body() dto: UpdateResultDto,
+    @Request() req: any,
+  ) {
+    const { userId } = requireDoctor(req);
+    return this.assessmentsService.updateResult(id, userId, dto);
   }
 
   // PATCH /assessments/:id/followup — บันทึกวันติดตาม (เฉพาะแพทย์เจ้าของเคส)

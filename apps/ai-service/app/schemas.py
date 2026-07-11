@@ -32,5 +32,7 @@ class AiResult(BaseModel):
     bmiPercentile: float | None = None
     heightSdScore: float | None = None
     riskFlag: str = "normal"  # normal | short_stature | tall_stature | advanced | delayed
-    isMock: bool = False      # True = ผลจาก mock pipeline (model จริงยังไม่ load)
-    aiProvider: str = "mock"  # mock | external_demo — บอกแหล่งที่มาของ bone age ให้ UI แสดงให้ถูกต้อง
+    # isMock คงไว้เพื่อ backward-compat กับข้อมูลเก่าใน DB — pipeline ปัจจุบันไม่มี mock แล้ว
+    # (external model ล้มเหลว = report ai-failed ไม่ใช่ผลจำลอง)
+    isMock: bool = False
+    aiProvider: str = "external_demo"  # แหล่งที่มาของ bone age — บอก UI ว่าเป็นโมเดลทดลอง

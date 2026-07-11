@@ -48,8 +48,8 @@ export function FahThChart({ assessments, lang }: { assessments: Assessment[]; l
   const lastFah = fahPts[fahPts.length - 1];
 
   // ── Label collision: เช็คกล่องข้อความสองป้ายจริง ๆ ไม่ใช่แค่จับมุมคนละฝั่ง ──
-  // (ป้ายใช้ font 10-11px — ประมาณความกว้างคงที่พอสำหรับกันชน เพราะ SSR วัด SVG จริงไม่ได้)
-  const TH_LABEL_W = 72, FAH_LABEL_W = 84, LABEL_H = 12;
+  // (ป้ายใช้ font 12px — ประมาณความกว้างคงที่พอสำหรับกันชน เพราะ SSR วัด SVG จริงไม่ได้)
+  const TH_LABEL_W = 86, FAH_LABEL_W = 100, LABEL_H = 14;
   const fahLabelY = Math.max(PY + 8, lastFah.y - 10);
   let thLabelY = thPts.length > 0 ? Math.max(PY + 8, thPts[0].y - 6) : 0;
   if (thPts.length > 0) {
@@ -97,7 +97,7 @@ export function FahThChart({ assessments, lang }: { assessments: Assessment[]; l
             return (
               <g key={f}>
                 <line x1={PX} y1={y} x2={PX + iW} y2={y} stroke="rgb(var(--border))" strokeWidth="0.8" strokeDasharray="4 4" />
-                <text x={PX - 5} y={y + 3.5} textAnchor="end" fontSize="9" fill="rgb(var(--muted))">{val}</text>
+                <text x={PX - 5} y={y + 4} textAnchor="end" fontSize="11" fill="rgb(var(--muted))">{val}</text>
               </g>
             );
           })}
@@ -123,7 +123,7 @@ export function FahThChart({ assessments, lang }: { assessments: Assessment[]; l
 
           {/* TH label: ชิดซ้ายบนเส้นอ้างอิง — ถ้ากล่องชนกับป้าย FAH (เช็คด้านบน) จะย้ายลงใต้เส้น */}
           {thConst && (
-            <text x={PX + 4} y={thLabelY} textAnchor="start" fontSize="10" fontWeight="700" fill="rgb(var(--warning))">
+            <text x={PX + 4} y={thLabelY} textAnchor="start" fontSize="12" fontWeight="700" fill="rgb(var(--warning))">
               TH {thConst} cm
             </text>
           )}
@@ -131,19 +131,20 @@ export function FahThChart({ assessments, lang }: { assessments: Assessment[]; l
           {/* FAH label: always at the most recent point (the clinically relevant value),
               anchored "end" with a left-hand offset so it never clips past the right edge. */}
           {lastFah && (
-            <text x={lastFah.x - 6} y={fahLabelY} textAnchor="end" fontSize="11" fontWeight="700" fill="rgb(var(--accent))">
+            <text x={lastFah.x - 6} y={fahLabelY} textAnchor="end" fontSize="12" fontWeight="700" fill="rgb(var(--accent))">
               FAH {lastFah.v} cm
             </text>
           )}
 
           {fahPts.map((p, i) => (
-            <text key={i} x={p.x} y={H - 4} textAnchor="middle" fontSize="9" fill="rgb(var(--muted))">
+            <text key={i} x={p.x} y={H - 4} textAnchor="middle" fontSize="10.5" fill="rgb(var(--muted))">
               {new Date(p.d).toLocaleDateString(th ? "th-TH" : "en-US", { month: "short", year: "2-digit" })}
             </text>
           ))}
 
-          <text x={10} y={PY + iH / 2} textAnchor="middle" fontSize="8" fill="rgb(var(--muted))" transform={`rotate(-90, 10, ${PY + iH / 2})`}>
-            {th ? "ซม." : "cm"}
+          {/* หน่วยแกนตั้ง — ใช้ "cm" (สัญลักษณ์ SI ไม่มีพหูพจน์/ไม่แปล) ให้ตรงกับส่วนอื่นของแอป */}
+          <text x={10} y={PY + iH / 2} textAnchor="middle" fontSize="10" fill="rgb(var(--muted))" transform={`rotate(-90, 10, ${PY + iH / 2})`}>
+            cm
           </text>
         </svg>
       </div>

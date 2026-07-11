@@ -1,9 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 import { Assessment, AssessmentStatus } from './assessment.entity';
 import { CreateAssessmentDto } from './dto/create-assessment.dto';
 import { AiResultDto } from './dto/ai-result.dto';
+import { UpdateResultDto } from './dto/update-result.dto';
 import { NotifyParentDto } from './dto/notify-parent.dto';
 import { RedisService } from '../redis/redis.service';
 import { StorageService } from '../storage/storage.service';
@@ -116,6 +117,12 @@ export class AssessmentsService {
     const { affected } = await this.assessmentRepo.update(assessmentId, {
       ...result,
       status: AssessmentStatus.COMPLETED,
+      // snapshot ค่าดิบจาก AI แยกไว้ — คอลัมน์หลักแพทย์แก้ทับได้ ชุด ai* ไว้โชว์เทียบ
+      aiBoneAgeMonths: result.boneAgeMonths,
+      aiFinalAdultHeightCm: result.finalAdultHeightCm ?? null,
+      aiRiskFlag: result.riskFlag ?? null,
+      resultEditedAt: null, // ผล AI ชุดใหม่ → ล้างสถานะ "แพทย์ปรับแล้ว" ของผลชุดเก่า
+      reviewedAt: null, // ผลชุดใหม่ต้องผ่านตาแพทย์อีกรอบ
     } as Partial<Assessment>);
     if (!affected) throw new NotFoundException('ไม่พบข้อมูลการประเมิน');
 
@@ -143,7 +150,8 @@ export class AssessmentsService {
       const kids = await this.childRepo.find({ where: { parentId: user.userId } });
       if (kids.length === 0) return [];
       rows = await this.assessmentRepo.find({
-        where: { childId: In(kids.map((k) => k.id)) },
+        // ผู้ปกครองเห็นเฉพาะผลที่แพทย์ review แล้วกด "ส่งผลให้ผู้ปกครอง" เท่านั้น
+        where: { childId: In(kids.map((k) => k.id)), parentNotifiedAt: Not(IsNull()) },
         order: { createdAt: 'DESC' },
       });
     }
@@ -152,9 +160,11 @@ export class AssessmentsService {
 
   // ดูผลการประเมินทั้งหมดของเด็กคนนึง — เช็คสิทธิ์ก่อน
   async findByChildAuthorized(childId: string, user: RequestUser) {
-    await this.assertChildAccess(childId, user);
+    const child = await this.assertChildAccess(childId, user);
+    const isOwnerDoctor = user.role === 'doctor' && child.doctorId === user.userId;
     const rows = await this.assessmentRepo.find({
-      where: { childId },
+      // ผู้ปกครองเห็นเฉพาะผลที่แพทย์กดส่งแล้ว — ผลที่ AI เพิ่งเสร็จยังเป็นของแพทย์ review ก่อน
+      where: isOwnerDoctor ? { childId } : { childId, parentNotifiedAt: Not(IsNull()) },
       order: { createdAt: 'DESC' },
     });
     return this.signAssessments(rows);
@@ -163,7 +173,12 @@ export class AssessmentsService {
   // ดูรายละเอียดผลการประเมิน — เช็คสิทธิ์ผ่านเด็กเจ้าของผล
   async findOneAuthorized(id: string, user: RequestUser) {
     const assessment = await this.findOne(id);
-    await this.assertChildAccess(assessment.childId, user);
+    const child = await this.assertChildAccess(assessment.childId, user);
+    const isOwnerDoctor = user.role === 'doctor' && child.doctorId === user.userId;
+    // ผู้ปกครองยังไม่ควรเห็นผลที่แพทย์ยังไม่กดส่ง — ตอบ 404 เหมือนไม่มีอยู่ (ไม่ leak ว่ามีการตรวจ)
+    if (!isOwnerDoctor && !assessment.parentNotifiedAt) {
+      throw new NotFoundException('ไม่พบข้อมูลการประเมิน');
+    }
     return this.signAssessment(assessment);
   }
 
@@ -174,8 +189,8 @@ export class AssessmentsService {
     return assessment;
   }
 
-  // ── Mock AI (demo only) — delegate ให้ AI service เหมือน flow จริง ──
-  async mockAiResult(id: string, doctorId: string) {
+  // สั่งวิเคราะห์ AI ใหม่ (เคส pending ค้าง/failed) — เรียก AI service จริงเสมอ ไม่มี mock
+  async retryAi(id: string, doctorId: string) {
     const assessment = await this.findOne(id);
     if (assessment.doctorId !== doctorId) {
       throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
@@ -184,6 +199,54 @@ export class AssessmentsService {
     if (!child) throw new NotFoundException('ไม่พบข้อมูลเด็ก');
     await this._callAiService(assessment, child);
     return this.signAssessment(assessment);
+  }
+
+  // แพทย์ปรับผล AI (อายุกระดูก / FAH / การแปลผล / โน้ต) ก่อนส่งให้ผู้ปกครอง — เฉพาะแพทย์เจ้าของเคส
+  async updateResult(id: string, doctorId: string, dto: UpdateResultDto) {
+    const assessment = await this.findOne(id);
+    if (assessment.doctorId !== doctorId) {
+      throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
+    }
+    if (assessment.status !== AssessmentStatus.COMPLETED) {
+      throw new BadRequestException('ผลการประเมินยังไม่เสร็จ — แก้ไขได้เฉพาะผลที่ AI วิเคราะห์เสร็จแล้ว');
+    }
+    // เอาเฉพาะ field ที่ส่งมาจริง — PATCH บางส่วนต้องไม่ล้างค่าที่เหลือ
+    const changes = Object.fromEntries(
+      Object.entries(dto).filter(([, v]) => v !== undefined),
+    ) as Partial<Assessment>;
+    if (Object.keys(changes).length === 0) {
+      throw new BadRequestException('ไม่มีข้อมูลที่จะแก้ไข');
+    }
+    // แถวเก่าก่อนมีคอลัมน์ ai* (snapshot ตอน AI ตอบ) — เก็บค่าปัจจุบันเป็นค่าดิบก่อนถูกแก้ทับครั้งแรก
+    const backfill: Partial<Assessment> =
+      assessment.aiBoneAgeMonths == null && !assessment.resultEditedAt
+        ? {
+            aiBoneAgeMonths: assessment.boneAgeMonths,
+            aiFinalAdultHeightCm: assessment.finalAdultHeightCm ?? null,
+            aiRiskFlag: assessment.riskFlag ?? null,
+          } as Partial<Assessment>
+        : {};
+    const now = new Date();
+    await this.assessmentRepo.update(id, {
+      ...backfill,
+      ...changes,
+      resultEditedAt: now, // ป้าย "แพทย์ปรับผลแล้ว" + audit ว่าผลไม่ตรงกับ AI ดิบ
+      reviewedAt: now, // การปรับค่า = รีวิวแล้วโดยปริยาย
+    });
+    return this.findOne(id).then((a) => this.signAssessment(a));
+  }
+
+  // แพทย์ยืนยันผล AI ตามเดิมโดยไม่แก้ค่า — บันทึกว่า "ผ่านตาแพทย์แล้ว" (ป้ายแพทย์ตรวจสอบแล้ว)
+  async markReviewed(id: string, doctorId: string) {
+    const assessment = await this.findOne(id);
+    if (assessment.doctorId !== doctorId) {
+      throw new ForbiddenException('ไม่มีสิทธิ์เข้าถึงข้อมูลนี้');
+    }
+    if (assessment.status !== AssessmentStatus.COMPLETED) {
+      throw new BadRequestException('ผลการประเมินยังไม่เสร็จ — รีวิวได้เฉพาะผลที่ AI วิเคราะห์เสร็จแล้ว');
+    }
+    await this.assessmentRepo.update(id, { reviewedAt: new Date() });
+    return this.findOne(id).then((a) => this.signAssessment(a));
   }
 
   // บันทึก follow-up date — เฉพาะแพทย์เจ้าของเคส

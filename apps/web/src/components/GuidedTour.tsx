@@ -22,6 +22,9 @@ interface TourStep {
   title:      { th: string; en: string };
   body:       { th: string; en: string };
   placement?: "top" | "bottom" | "left" | "right" | "auto";
+  // คลิก element นี้ตอนกด "ถัดไป" (เช่น เปิด/ปิดพาเนลรายละเอียดผล) — ทัวร์จะรอให้
+  // step ถัดไปโผล่ใน DOM ก่อนค่อยเดินต่อ; ไม่คลิกถ้าเป็น step สุดท้าย (ไม่มีที่ให้ไปต่อ)
+  advanceClick?: string;
 }
 
 interface SpotRect { top: number; left: number; width: number; height: number }
@@ -188,8 +191,8 @@ const PARENT_STEPS: TourStep[] = [
   },
 ];
 
-// Patient detail page (/dashboard/patients/[id]) — doctor
-const PATIENT_DETAIL_DOCTOR_STEPS: TourStep[] = [
+// Patient detail page (/dashboard/patients/[id]) — doctor (ส่วนบนหน้า ก่อนเข้าพาเนล)
+const PATIENT_DETAIL_DOCTOR_PAGE_STEPS: TourStep[] = [
   {
     selector: "[data-tour='new-assessment']",
     title: { th: "สร้างการประเมินใหม่", en: "New Assessment" },
@@ -219,22 +222,76 @@ const PATIENT_DETAIL_DOCTOR_STEPS: TourStep[] = [
   },
   {
     selector: "[data-tour='detail-btn']",
-    title: { th: "ปุ่ม \"ดูรายละเอียด\"", en: "\"View Details\" Button" },
+    title: { th: "ปุ่ม \"ดูรายละเอียด\" — รีวิวผลที่นี่", en: "\"View Details\" — Review Here" },
     body: {
-      th: "เปิดดูภาพ X-ray และ Heatmap (จุดที่ AI ใช้ตัดสินใจ), ตัวเลขเชิงลึกทั้งหมด, การแปลผลทางคลินิก และฟอร์มส่งผล + วันนัดให้ผู้ปกครองทางอีเมล",
-      en: "Opens the X-ray and heatmap (where the AI looked), all detailed metrics, the clinical interpretation, and the form to email results + follow-up dates to the parent.",
+      th: "ข้างในคือขั้นตอนสำคัญที่สุด: ดู X-ray/Heatmap, รีวิวผล AI (ยืนยันตามเดิมหรือปรับค่า) และส่งผล+วันนัดให้ผู้ปกครอง — กด \"ถัดไป\" แล้วทัวร์จะเปิดพาเนลพาไปดูทีละปุ่มเลย",
+      en: "Inside is the most important workflow: the X-ray/heatmap, reviewing the AI result (confirm or adjust), and sending results + follow-up to the parent. Press \"Next\" and the tour will open the panel and walk you through it.",
     },
     placement: "top",
+    advanceClick: "[data-tour='detail-btn']", // กดถัดไป = เปิดพาเนลรายละเอียดของเคสล่าสุดให้เลย
+  },
+];
+
+// ปุ่มพิมพ์ PDF — step ปิดท้ายหลังทัวร์พากลับออกมาจากพาเนล
+const PRINT_BTN_STEP: TourStep = {
+  selector: "[data-tour='print-btn']",
+  title: { th: "ปุ่ม \"พิมพ์รายงาน PDF\"", en: "\"Print PDF Report\" Button" },
+  body: {
+    th: "เปิดรายงานฉบับทางการขนาด A4 (ผลวิเคราะห์ กราฟ ลายเซ็นแพทย์) จากนั้นกด \"พิมพ์ / Save as PDF\" เพื่อสั่งพิมพ์หรือบันทึกเป็นไฟล์ PDF",
+    en: "Opens the official A4 report (results, charts, physician signature). Then press \"Print / Save as PDF\" to print or save it as a PDF file.",
+  },
+  placement: "top",
+};
+
+// Assessment detail panel (เปิดจากปุ่ม "ดูรายละเอียด") — doctor workflow: รีวิว → ยืนยัน/ปรับ → นัด+ส่ง
+// ใช้เมื่อพาเนลเปิดค้างอยู่ตอนกดปุ่มคู่มือ (ดู panelMode ใน TourProvider)
+const ASSESSMENT_PANEL_DOCTOR_STEPS: TourStep[] = [
+  {
+    selector: "[data-tour='review-card']",
+    title: { th: "ตรวจทานผล AI ก่อนส่ง", en: "Review the AI Result First" },
+    body: {
+      th: "ผลทุกใบต้องผ่านตาแพทย์ก่อน — ผู้ปกครองจะยังไม่เห็นผลนี้ในแอปจนกว่าคุณหมอจะรีวิวและกดส่ง การ์ดนี้คือจุดตัดสินใจ: เห็นด้วยกับ AI หรือจะปรับค่า",
+      en: "Every result passes through the doctor first — the parent can't see it until you review and send. This card is the decision point: agree with the AI, or adjust.",
+    },
+    placement: "left",
   },
   {
-    selector: "[data-tour='print-btn']",
-    title: { th: "ปุ่ม \"พิมพ์รายงาน PDF\"", en: "\"Print PDF Report\" Button" },
+    selector: "[data-tour='confirm-btn']",
+    title: { th: "ยืนยันผลตามนี้ ✓", en: "Confirm As-Is ✓" },
     body: {
-      th: "เปิดรายงานฉบับทางการขนาด A4 (ผลวิเคราะห์ กราฟ ลายเซ็นแพทย์) จากนั้นกด \"พิมพ์ / Save as PDF\" เพื่อสั่งพิมพ์หรือบันทึกเป็นไฟล์ PDF",
-      en: "Opens the official A4 report (results, charts, physician signature). Then press \"Print / Save as PDF\" to print or save it as a PDF file.",
+      th: "ถ้าเห็นด้วยกับผล AI กดปุ่มนี้ได้เลยโดยไม่ต้องแก้อะไร — ระบบจะติดป้าย \"แพทย์ตรวจสอบแล้ว\" ให้ผู้ปกครองมั่นใจว่าผลผ่านการรีวิวจากแพทย์จริง",
+      en: "Agree with the AI? Press this — no edits needed. The result gets a \"Doctor reviewed\" badge so the parent knows a physician verified it.",
     },
-    placement: "top",
+    placement: "left",
   },
+  {
+    selector: "[data-tour='adjust-btn']",
+    title: { th: "ปรับผลตามดุลยพินิจ", en: "Adjust the Values" },
+    body: {
+      th: "ถ้าผล AI ไม่ตรงตามดุลยพินิจ กดเพื่อแก้อายุกระดูก ส่วนสูงพยากรณ์ (FAH) และการแปลผล — ระบบเก็บค่าดิบจาก AI ไว้เทียบให้เสมอ และติดป้าย \"แพทย์ปรับผลแล้ว\"",
+      en: "If the AI doesn't match your judgment, adjust the bone age, predicted adult height (FAH), and interpretation. The original AI values are kept for comparison, and the result is tagged \"Doctor adjusted\".",
+    },
+    placement: "left",
+  },
+  {
+    selector: "[data-tour='notify-card']",
+    title: { th: "นัดติดตาม + ส่งผลให้ผู้ปกครอง", en: "Follow-up & Send to Parent" },
+    body: {
+      th: "ขั้นสุดท้าย: กำหนดวันนัดติดตาม (เลือกเวลาและเขียนคำแนะนำเพิ่มได้) แล้วกดส่ง — ผู้ปกครองจะได้รับอีเมลสรุปผล เห็นผลในแอป และอ่านคำแนะนำได้ในเมนูคำแนะนำจากแพทย์",
+      en: "Final step: set the follow-up date (time and a note are optional) and press send — the parent gets a summary email, the result unlocks in their app, and your note appears in their Recommendations menu.",
+    },
+    placement: "left",
+    // ในทัวร์ต่อเนื่อง: กดถัดไป = ปิดพาเนลกลับไปจบที่ปุ่ม PDF (ถ้าเป็น step สุดท้าย เช่น
+    // ทัวร์โหมดพาเนลเดี่ยว จะไม่คลิก — พาเนลค้างไว้ให้ใช้งานต่อ)
+    advanceClick: "[data-tour='panel-close']",
+  },
+];
+
+// ทัวร์ต่อเนื่องของแพทย์ในหน้าเคส: ส่วนบนหน้า → เปิดพาเนลอัตโนมัติ → รีวิว/ยืนยัน/ปรับ/นัด → ปิดพาเนล → PDF
+const PATIENT_DETAIL_DOCTOR_STEPS: TourStep[] = [
+  ...PATIENT_DETAIL_DOCTOR_PAGE_STEPS,
+  ...ASSESSMENT_PANEL_DOCTOR_STEPS,
+  PRINT_BTN_STEP,
 ];
 
 // Patient detail page (/dashboard/patients/[id]) — parent
@@ -737,6 +794,9 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [mounted,      setMounted]      = useState(false);
   const [showWelcome,  setShowWelcome]  = useState(false);
   const [role,         setRole]         = useState<string | null>(null);
+  // ทัวร์โหมดพาเนล — ถ้าแพทย์เปิดพาเนล "ดูรายละเอียด" ค้างอยู่ตอนกดปุ่มคู่มือ
+  // จะสอน workflow ในพาเนลแทน (รีวิว → ยืนยัน/ปรับผล → นัด+ส่งให้ผู้ปกครอง)
+  const [panelMode,    setPanelMode]    = useState(false);
   // จอ ≥ md เท่านั้นที่ mount มาสคอต 3D — CSS hidden อย่างเดียวไม่พอ เพราะยังดาวน์โหลด chunk อยู่ดี
   const [isDesktop,    setIsDesktop]    = useState(false);
   const { lang } = useI18n();
@@ -756,7 +816,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
   // Route- and role-aware step set
   const isPatientDetail =
     /^\/dashboard\/patients\/[^/]+$/.test(pathname) && pathname !== "/dashboard/patients/new";
-  const steps = isPatientDetail
+  const pageSteps = isPatientDetail
     ? (role === "doctor" ? PATIENT_DETAIL_DOCTOR_STEPS : PATIENT_DETAIL_PARENT_STEPS)
     : pathname.startsWith("/dashboard")
       ? [
@@ -764,12 +824,16 @@ export function TourProvider({ children }: { children: ReactNode }) {
           ...(role === "admin" ? ADMIN_STEPS : role === "doctor" ? DOCTOR_STEPS : PARENT_STEPS),
         ]
       : LANDING_STEPS;
+  const steps = panelMode && role === "doctor" && isPatientDetail
+    ? ASSESSMENT_PANEL_DOCTOR_STEPS
+    : pageSteps;
 
   // Reset tour + welcome gate on navigation
   useEffect(() => {
     setIsActive(false);
     setStepIndex(0);
     setShowWelcome(false);
+    setPanelMode(false);
   }, [pathname]);
 
   // Auto-show welcome gate on each role's overview page, once per session
@@ -788,13 +852,20 @@ export function TourProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(() => {
     setShowWelcome(false);
+    // ตัดสินใจตอนกดปุ่มเท่านั้น: พาเนลรายละเอียดผลเปิดอยู่ → ใช้ชุด step ของพาเนลแทน
+    const panelOpen =
+      role === "doctor" && isPatientDetail &&
+      (stepTargetVisible("[data-tour='review-card']") || stepTargetVisible("[data-tour='notify-card']"));
+    setPanelMode(panelOpen);
+    // ใช้ pageSteps (ไม่ใช่ steps) กัน closure ค้างชุดพาเนลจากทัวร์รอบก่อน
+    const effective = panelOpen ? ASSESSMENT_PANEL_DOCTOR_STEPS : pageSteps;
     // เริ่มที่ step แรกที่มี element มองเห็นได้จริง (ปุ่มบางตัวยังไม่มี / sidebar ปิดอยู่บนมือถือ)
     let idx = 0;
-    while (idx < steps.length && !stepTargetVisible(steps[idx].selector)) idx++;
-    if (idx >= steps.length) return;
+    while (idx < effective.length && !stepTargetVisible(effective[idx].selector)) idx++;
+    if (idx >= effective.length) return;
     setStepIndex(idx);
     setIsActive(true);
-  }, [steps]);
+  }, [pageSteps, role, isPatientDetail]);
 
   // Skip steps whose target element doesn't exist (or is off-screen) on the current page
   const advanceOrStop = useCallback((idx: number) => {
@@ -803,8 +874,33 @@ export function TourProvider({ children }: { children: ReactNode }) {
     setStepIndex(idx);
   }, [steps, stop]);
 
-  const next = useCallback(() => advanceOrStop(stepIndex + 1), [stepIndex, advanceOrStop]);
-  const prev = useCallback(() => setStepIndex(i => Math.max(0, i - 1)), []);
+  // หลัง advanceClick (เปิด/ปิดพาเนล) DOM ต้องใช้เวลา render — รอ target ของ step ถัดไป
+  // สูงสุด ~1.2 วิ ก่อนยอมแพ้แล้วปล่อยให้ logic ข้าม step ทำงานตามปกติ
+  const waitAdvance = useCallback((idx: number, tries = 0) => {
+    if (idx >= steps.length) { stop(); return; }
+    if (stepTargetVisible(steps[idx].selector)) { setStepIndex(idx); return; }
+    if (tries >= 20) { advanceOrStop(idx); return; }
+    setTimeout(() => waitAdvance(idx, tries + 1), 60);
+  }, [steps, stop, advanceOrStop]);
+
+  const next = useCallback(() => {
+    const cur = steps[stepIndex];
+    const hasNext = stepIndex + 1 < steps.length;
+    // คลิก element ประกอบ (เช่น เปิดพาเนลรายละเอียด/ปิดพาเนลกลับหน้าเดิม) เฉพาะเมื่อมี step ต่อ
+    if (cur?.advanceClick && hasNext) {
+      document.querySelector<HTMLElement>(cur.advanceClick)?.click();
+      waitAdvance(stepIndex + 1);
+      return;
+    }
+    advanceOrStop(stepIndex + 1);
+  }, [stepIndex, steps, advanceOrStop, waitAdvance]);
+
+  // ย้อนกลับแบบข้าม step ที่มองไม่เห็น (เช่น step ในพาเนลที่ถูกปิดไปแล้ว)
+  const prev = useCallback(() => {
+    let i = stepIndex - 1;
+    while (i >= 0 && !stepTargetVisible(steps[i].selector)) i--;
+    if (i >= 0) setStepIndex(i);
+  }, [stepIndex, steps]);
 
   return (
     <TourContext.Provider value={{ start, stop, isActive, isWelcomeActive: showWelcome }}>
@@ -814,7 +910,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
           (ซ่อนบนหน้า login/register — ไม่มี tour ให้เล่นที่นั่น) */}
       {mounted && !isActive && !showWelcome && !pathname.startsWith("/login") && (
         <div
-          className="fixed bottom-6 right-6 z-20 flex flex-col items-center gap-0 print:hidden"
+          // z สูงกว่าพาเนลรายละเอียดผล (z-50) — ปุ่มคู่มือต้องกดได้แม้พาเนลเปิดอยู่ (ทัวร์โหมดพาเนล)
+          className="fixed bottom-6 right-6 z-[60] flex flex-col items-center gap-0 print:hidden"
         >
           {/* จอเล็ก: ไม่ mount มาสคอตเลย — ประหยัดทั้ง three.js chunk และโมเดล 1.8MB */}
           {isDesktop && (
