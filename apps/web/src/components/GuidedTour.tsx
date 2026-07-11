@@ -25,6 +25,9 @@ interface TourStep {
   // คลิก element นี้ตอนกด "ถัดไป" (เช่น เปิด/ปิดพาเนลรายละเอียดผล) — ทัวร์จะรอให้
   // step ถัดไปโผล่ใน DOM ก่อนค่อยเดินต่อ; ไม่คลิกถ้าเป็น step สุดท้าย (ไม่มีที่ให้ไปต่อ)
   advanceClick?: string;
+  // คลิก element นี้ตอนกด "ถัดไป" เพื่อ "เปลี่ยนหน้า" (Next.js Link) แล้วทัวร์ไปต่อ
+  // อัตโนมัติบนหน้าใหม่ (ผ่าน sessionStorage "tourResume") — ใช้กับ step สุดท้ายของหน้า
+  navigateNext?: string;
 }
 
 interface SpotRect { top: number; left: number; width: number; height: number }
@@ -153,10 +156,11 @@ const DOCTOR_STEPS: TourStep[] = [
     selector: "[data-tour='patient-list']",
     title: { th: "รายชื่อผู้ป่วย — เปิดแฟ้มเคสที่นี่", en: "Patient List — Open a Case" },
     body: {
-      th: "คลิกชื่อผู้ป่วยเพื่อเปิดแฟ้มเคส: อัปโหลด X-ray ให้ AI ประเมินอายุกระดูก, ดูรายละเอียดผล, พิมพ์รายงาน PDF และส่งผล+วันนัดให้ผู้ปกครอง (เข้าไปแล้วกดปุ่ม \"คู่มือการใช้\" อีกครั้ง จะมีทัวร์สอนละเอียดในหน้านั้น)",
-      en: "Click a patient to open their case: upload an X-ray for AI bone age assessment, view detailed results, print a PDF report, and send results + follow-up dates to the parent. (Press \"Tutorial\" again inside for a detailed tour of that page.)",
+      th: "แฟ้มเคสของผู้ป่วยแต่ละคนคือที่ทำงานหลักของคุณหมอ: อัปโหลด X-ray, รีวิว/ปรับผล AI, พิมพ์รายงาน PDF และส่งผลให้ผู้ปกครอง — กด \"ถัดไป\" แล้วทัวร์จะพาเข้าแฟ้มเคสคนแรกต่อเลย",
+      en: "Each patient's case file is your main workspace: upload X-rays, review/adjust AI results, print PDF reports, and send results to parents. Press \"Next\" and the tour will take you into the first case.",
     },
     placement: "top",
+    navigateNext: "[data-tour='patient-row']", // กดถัดไป = เข้าแฟ้มเคสคนแรก แล้วทัวร์ต่อในหน้านั้น
   },
 ];
 
@@ -172,15 +176,6 @@ const PARENT_STEPS: TourStep[] = [
     placement: "top",
   },
   {
-    selector: "[data-tour='patient-list']",
-    title: { th: "บุตรหลานของคุณ", en: "Your Children" },
-    body: {
-      th: "คลิกชื่อลูกเพื่อดูผลประเมินอายุกระดูก, กราฟการเจริญเติบโตเทียบเกณฑ์ WHO, ดูรายละเอียดแต่ละครั้ง และเปิดรายงานฉบับเต็มเป็น PDF (เข้าไปแล้วกดปุ่ม \"คู่มือการใช้\" อีกครั้ง จะมีทัวร์สอนละเอียดในหน้านั้น)",
-      en: "Click your child's name to see bone age results, WHO growth charts, per-visit details, and the full PDF report. (Press \"Tutorial\" again inside for a detailed tour of that page.)",
-    },
-    placement: "top",
-  },
-  {
     selector: "[data-tour='nav-rec']",
     title: { th: "เมนูคำแนะนำจากแพทย์", en: "Doctor's Recommendations" },
     body: {
@@ -188,6 +183,16 @@ const PARENT_STEPS: TourStep[] = [
       en: "When the doctor sends results, recommendations and follow-up dates appear here (you'll also get an email). Unread items are flagged.",
     },
     placement: "right",
+  },
+  {
+    selector: "[data-tour='patient-list']",
+    title: { th: "บุตรหลานของคุณ", en: "Your Children" },
+    body: {
+      th: "หน้าประวัติของลูกแต่ละคนรวมทุกอย่างไว้: ผลประเมินอายุกระดูก, กราฟการเจริญเติบโตเทียบเกณฑ์ WHO และรายงาน PDF — กด \"ถัดไป\" แล้วทัวร์จะพาเข้าหน้าของลูกคนแรกต่อเลย",
+      en: "Each child's page has everything: bone age results, WHO growth charts, and the PDF report. Press \"Next\" and the tour will take you into your first child's page.",
+    },
+    placement: "top",
+    navigateNext: "[data-tour='patient-row']", // กดถัดไป = เข้าหน้าลูกคนแรก แล้วทัวร์ต่อในหน้านั้น
   },
 ];
 
@@ -563,7 +568,8 @@ function TourOverlay({
 }) {
   const step   = steps[stepIndex];
   const ui     = UI[lang];
-  const isLast = stepIndex === steps.length - 1;
+  // step ที่พาไปหน้าถัดไป (navigateNext) ไม่ใช่จุดจบทัวร์ — ปุ่มต้องเป็น "ถัดไป" เสมอ
+  const isLast = stepIndex === steps.length - 1 && !step.navigateNext;
 
   const [spot,  setSpot]  = useState<SpotRect | null>(null);
   const [place, setPlace] = useState<Placement>("bottom");
@@ -828,12 +834,22 @@ export function TourProvider({ children }: { children: ReactNode }) {
     ? ASSESSMENT_PANEL_DOCTOR_STEPS
     : pageSteps;
 
-  // Reset tour + welcome gate on navigation
+  // Reset tour + welcome gate on navigation — แต่ถ้าเป็นการนำทาง "ต่อทัวร์ข้ามหน้า"
+  // (navigateNext ตั้ง sessionStorage ไว้) ให้ลองสตาร์ททัวร์ของหน้าใหม่อัตโนมัติ
+  // — retry เพราะหน้าใหม่ต้อง fetch ข้อมูลก่อน element เป้าหมายถึงจะโผล่
   useEffect(() => {
     setIsActive(false);
     setStepIndex(0);
     setShowWelcome(false);
     setPanelMode(false);
+    if (typeof sessionStorage === "undefined" || sessionStorage.getItem("tourResume") !== "1") return;
+    sessionStorage.removeItem("tourResume");
+    let tries = 0;
+    const timer = setInterval(() => {
+      tries++;
+      if (startRef.current() || tries >= 20) clearInterval(timer); // สูงสุด ~8 วิ
+    }, 400);
+    return () => clearInterval(timer);
   }, [pathname]);
 
   // Auto-show welcome gate on each role's overview page, once per session
@@ -850,7 +866,8 @@ export function TourProvider({ children }: { children: ReactNode }) {
     setStepIndex(0);
   }, []);
 
-  const start = useCallback(() => {
+  // คืน true เมื่อสตาร์ทสำเร็จ — resume ข้ามหน้าใช้ค่านี้ตัดสินใจว่าจะ retry ต่อไหม
+  const start = useCallback((): boolean => {
     setShowWelcome(false);
     // ตัดสินใจตอนกดปุ่มเท่านั้น: พาเนลรายละเอียดผลเปิดอยู่ → ใช้ชุด step ของพาเนลแทน
     const panelOpen =
@@ -862,10 +879,15 @@ export function TourProvider({ children }: { children: ReactNode }) {
     // เริ่มที่ step แรกที่มี element มองเห็นได้จริง (ปุ่มบางตัวยังไม่มี / sidebar ปิดอยู่บนมือถือ)
     let idx = 0;
     while (idx < effective.length && !stepTargetVisible(effective[idx].selector)) idx++;
-    if (idx >= effective.length) return;
+    if (idx >= effective.length) return false;
     setStepIndex(idx);
     setIsActive(true);
+    return true;
   }, [pageSteps, role, isPatientDetail]);
+
+  // ref ล่าสุดของ start — effect ตอนเปลี่ยนหน้า (resume ข้ามหน้า) ต้องเรียกเวอร์ชันใหม่เสมอ
+  const startRef = useRef(start);
+  useEffect(() => { startRef.current = start; }, [start]);
 
   // Skip steps whose target element doesn't exist (or is off-screen) on the current page
   const advanceOrStop = useCallback((idx: number) => {
@@ -886,6 +908,19 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const next = useCallback(() => {
     const cur = steps[stepIndex];
     const hasNext = stepIndex + 1 < steps.length;
+    // ทัวร์ต่อเนื่องข้ามหน้า: คลิกลิงก์นำทาง (เช่น แถวผู้ป่วยคนแรก) แล้วให้ effect
+    // ตอนเปลี่ยน pathname สตาร์ททัวร์ของหน้าใหม่ต่อผ่าน sessionStorage
+    if (cur?.navigateNext) {
+      const el = document.querySelector<HTMLElement>(cur.navigateNext);
+      if (el) {
+        sessionStorage.setItem("tourResume", "1");
+        el.click();
+        return;
+      }
+      // ไม่มีรายการให้เข้า (เช่น ยังไม่มีผู้ป่วย) — จบทัวร์ตามปกติ
+      stop();
+      return;
+    }
     // คลิก element ประกอบ (เช่น เปิดพาเนลรายละเอียด/ปิดพาเนลกลับหน้าเดิม) เฉพาะเมื่อมี step ต่อ
     if (cur?.advanceClick && hasNext) {
       document.querySelector<HTMLElement>(cur.advanceClick)?.click();
@@ -893,7 +928,7 @@ export function TourProvider({ children }: { children: ReactNode }) {
       return;
     }
     advanceOrStop(stepIndex + 1);
-  }, [stepIndex, steps, advanceOrStop, waitAdvance]);
+  }, [stepIndex, steps, advanceOrStop, waitAdvance, stop]);
 
   // ย้อนกลับแบบข้าม step ที่มองไม่เห็น (เช่น step ในพาเนลที่ถูกปิดไปแล้ว)
   const prev = useCallback(() => {

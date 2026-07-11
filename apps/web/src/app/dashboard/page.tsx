@@ -160,6 +160,7 @@ export default function DashboardPage() {
               <div className="divide-y divide-border/40">
                 {children.slice(0, 8).map((child, i) => (
                   <Link key={child.id} href={`/dashboard/patients/${child.id}`}
+                    data-tour="patient-row"
                     className="flex items-center gap-4 px-6 py-3.5 hover:bg-primary/[0.04] transition-colors group">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-bold flex-shrink-0 text-white"
                       style={{ background: child.sex === "M" ? "linear-gradient(135deg,rgb(var(--aurora-1)),rgb(var(--aurora-3)))" : "linear-gradient(135deg,rgb(var(--accent)),rgb(var(--warning)))" }}>
