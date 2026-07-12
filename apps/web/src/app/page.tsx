@@ -449,7 +449,7 @@ export default function Home() {
         {/* ── Proof strip (marquee) ───────────────────────────────────────── */}
         <section aria-label="Key metrics" className="bg-bg border-b border-border overflow-hidden">
           <div className="max-w-5xl mx-auto px-6 py-9 grid grid-cols-2 md:grid-cols-4 gap-6">
-            <StatBlock value={10} prefix="<" suffix="s" label={th ? "เวลาวิเคราะห์" : "Analysis time"} />
+            <StatBlock value={20} prefix="<" suffix="s" label={th ? "เวลาวิเคราะห์" : "Analysis time"} />
             <StatBlock value={6.11} decimals={2} label={th ? "Val MAE (เดือน)" : "Val MAE (months)"} />
             <StatBlock value={4.36} decimals={2} label={th ? "Test MAE (เดือน)" : "Test MAE (months)"} />
             <StaticStat value="Low Bias" label={th ? "ความเอนเอียงของโมเดลต่ำ" : "Minimal model bias"} />

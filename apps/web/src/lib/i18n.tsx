@@ -15,7 +15,7 @@ const translations = {
       desc: "ระบบวิเคราะห์ภาพ X-ray ด้วย AI เพื่อประเมินอายุกระดูกและติดตามการเจริญเติบโตของเด็กไทย อย่างแม่นยำและรวดเร็ว",
       cta1: "เริ่มประเมินทันที", cta2: "ดูตัวอย่าง",
       s1v: "4.36", s1l: "Test MAE (เดือน)",
-      s2v: "<10s", s2l: "เวลาวิเคราะห์",
+      s2v: "<20s", s2l: "เวลาวิเคราะห์",
       s3v: "ฟรี", s3l: "สำหรับแพทย์",
     },
     card: {
@@ -189,7 +189,7 @@ const translations = {
       desc: "AI-powered X-ray analysis for precise bone age assessment and growth monitoring of Thai children — fast and accurate.",
       cta1: "Start Assessment", cta2: "View Demo",
       s1v: "4.36", s1l: "Test MAE (months)",
-      s2v: "<10s", s2l: "Analysis Time",
+      s2v: "<20s", s2l: "Analysis Time",
       s3v: "Free", s3l: "For Doctors",
     },
     card: {

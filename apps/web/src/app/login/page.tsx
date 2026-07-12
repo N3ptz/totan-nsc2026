@@ -202,7 +202,7 @@ export default function LoginPage() {
           <div className="grid grid-cols-3 gap-3">
             {[
               { v: "4.36", l: tl.s1 },
-              { v: "<10s", l: tl.s2 },
+              { v: "<20s", l: tl.s2 },
               { v: "Low Bias", l: tl.s3 },
             ].map((s, i) => (
               <div key={s.l} className="rounded-2xl p-4 text-center transition-transform hover:-translate-y-1 animate-fade-up"
