@@ -58,7 +58,7 @@ export function NewAssessmentPanel({
     <>
       <div className={`panel-backdrop fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]${exiting ? " panel-backdrop--out" : ""}`} onClick={handleClose} />
 
-      <div className={`panel-sheet fixed right-0 top-0 bottom-0 z-50 w-full max-w-md glass-strong border-l border-border/60 flex flex-col overflow-hidden${exiting ? " panel-sheet--out" : ""}`}>
+      <div data-side-panel className={`panel-sheet fixed right-0 top-0 bottom-0 z-50 w-full max-w-md glass-strong border-l border-border/60 flex flex-col overflow-hidden${exiting ? " panel-sheet--out" : ""}`}>
         <div className="flex items-center gap-3 px-6 py-4 border-b border-border/50">
           <button onClick={handleClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted hover:text-ink hover:bg-border/40 transition-all">
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>

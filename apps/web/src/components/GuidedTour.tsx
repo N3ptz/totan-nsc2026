@@ -805,6 +805,9 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [panelMode,    setPanelMode]    = useState(false);
   // จอ ≥ md เท่านั้นที่ mount มาสคอต 3D — CSS hidden อย่างเดียวไม่พอ เพราะยังดาวน์โหลด chunk อยู่ดี
   const [isDesktop,    setIsDesktop]    = useState(false);
+  // พาเนลข้างฝั่งขวา (รายละเอียดผล/ประเมินใหม่/ตั้งค่า) เปิดอยู่ — มาสคอตต้องหลบ
+  // ไม่งั้นบังปุ่มส่งผล/ฟอร์มในพาเนล; ปุ่มคู่มือย้ายไปมุมซ้ายแทน (ยังต้องกดได้เพื่อทัวร์โหมดพาเนล)
+  const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const { lang } = useI18n();
   const pathname = usePathname();
 
@@ -817,6 +820,16 @@ export function TourProvider({ children }: { children: ReactNode }) {
     update();
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
+  }, []);
+
+  // เฝ้าดู DOM หา [data-side-panel] — พาเนลพวกนี้ mount/unmount ตาม state ภายในหน้า
+  // ไม่มี event กลางให้ฟัง จึงใช้ MutationObserver (querySelector ถูกมาก ไม่กระทบ perf)
+  useEffect(() => {
+    const check = () => setSidePanelOpen(!!document.querySelector("[data-side-panel]"));
+    check();
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => mo.disconnect();
   }, []);
 
   // Route- and role-aware step set
@@ -946,10 +959,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
       {mounted && !isActive && !showWelcome && !pathname.startsWith("/login") && (
         <div
           // z สูงกว่าพาเนลรายละเอียดผล (z-50) — ปุ่มคู่มือต้องกดได้แม้พาเนลเปิดอยู่ (ทัวร์โหมดพาเนล)
-          className="fixed bottom-6 right-6 z-[60] flex flex-col items-center gap-0 print:hidden"
+          // พาเนลเปิด: ย้ายไปมุมซ้ายให้พ้นพาเนลฝั่งขวา และซ่อนมาสคอตไม่ให้บังเนื้อหา
+          className={`fixed bottom-6 z-[60] flex flex-col items-center gap-0 print:hidden transition-all duration-300 ${
+            sidePanelOpen ? "left-6" : "right-6"
+          }`}
         >
           {/* จอเล็ก: ไม่ mount มาสคอตเลย — ประหยัดทั้ง three.js chunk และโมเดล 1.8MB */}
-          {isDesktop && (
+          {isDesktop && !sidePanelOpen && (
             <HippoMascot
               size="sm"
               message={lang === "th" ? "สวัสดีครับ! พร้อมช่วยติดตามการเติบโต" : "Hi! Ready to track growth"}

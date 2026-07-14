@@ -174,7 +174,7 @@ export function AssessmentDetailPanel({
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-full sm:max-w-lg glass-strong border-l border-border/60 flex flex-col overflow-hidden">
+      <div data-side-panel className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-full sm:max-w-lg glass-strong border-l border-border/60 flex flex-col overflow-hidden">
         <div className="flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-border/50 flex-shrink-0">
           <button onClick={onClose}
             data-tour="panel-close"
