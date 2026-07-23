@@ -10,9 +10,12 @@ aiProvider="external_demo" (see bone_age.py) specifically so the UI can label
 it as experimental rather than presenting it as equivalent to a validated
 production model.
 
-Verified live (see apps/ai-service — manual check, 2026-07-04):
-  /bone_age            -> {bone_age_months, bone_age_years, readable, sex}
+Verified live (see apps/ai-service — manual check, 2026-07-04; confidence_pct
+added to /bone_age by the Space team, confirmed 2026-07-23):
+  /bone_age            -> {bone_age_months, bone_age_years, readable, confidence_pct, sex}
   /confidence_interval -> {mean_months, sd_months, k, lower_months, upper_months, interval_str}
+                          (Space still exposes it but we no longer call it —
+                          confidence comes straight from /bone_age.confidence_pct)
   /gradcam              -> local file path (str) to the downloaded overlay image
 
 NOTE on passing the image: we upload raw bytes (via a temp file) rather than
@@ -65,11 +68,18 @@ def predict_external(image_bytes: bytes, sex: str) -> dict:
     try:
         img = handle_file(tmp_path)
 
-        # ต้องเรียก "เรียงลำดับ" เท่านั้น — ยืนยันแล้ว (11 ก.ค. 2026) ว่ายิง 3 endpoint
+        # ต้องเรียก "เรียงลำดับ" เท่านั้น — ยืนยันแล้ว (11 ก.ค. 2026) ว่ายิง endpoint
         # ขนานกันทำให้ Space ฝั่งโน้น raise exception (model state ไม่ thread-safe /
-        # GPU concurrency limit) ยิงเรียงผ่านตลอด แลกกับ round-trip ช้าลง ~3 เท่า
+        # GPU concurrency limit) ยิงเรียงผ่านตลอด แลกกับ round-trip ช้าลง
         bone_age = client.predict(image=img, sex=gradio_sex, api_name="/bone_age")
-        ci = client.predict(image=img, sex=gradio_sex, k=1.0, api_name="/confidence_interval")
+
+        # confidence_pct (0-100) มาจากโมเดลโดยตรง — ถ้าไม่มีถือว่า Space ผิดเวอร์ชัน
+        # ให้ fail ชัด ๆ (assessment เป็น FAILED) ดีกว่าเงียบ ๆ คำนวณค่าแทนเอง
+        if bone_age.get("confidence_pct") is None:
+            raise ValueError(
+                f"HF Space /bone_age response missing confidence_pct — got keys {list(bone_age)}"
+            )
+
         heatmap_path = client.predict(image=img, sex=gradio_sex, api_name="/gradcam")
 
         with open(heatmap_path, "rb") as f:
@@ -77,7 +87,7 @@ def predict_external(image_bytes: bytes, sex: str) -> dict:
 
         return {
             "bone_age_months": float(bone_age["bone_age_months"]),
-            "sd_months": float(ci["sd_months"]),
+            "confidence_pct": float(bone_age["confidence_pct"]),
             "heatmap_bytes": heatmap_bytes,
         }
     finally:

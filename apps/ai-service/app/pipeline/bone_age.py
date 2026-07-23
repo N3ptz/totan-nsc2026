@@ -104,20 +104,9 @@ class BoneAgePipeline:
         if not image_bytes:
             raise ValueError("no X-ray image bytes — cannot run bone age model")
         ext = predict_external(image_bytes, sex)
-        confidence = self._confidence_from_sd(ext["sd_months"])
+        # โมเดลรายงาน confidence เอง (0-100) — เก็บเป็นสเกล 0-1 ตามที่ UI ใช้
+        confidence = round(max(0.0, min(1.0, ext["confidence_pct"] / 100)), 3)
         return ext["bone_age_months"], confidence, ext["heatmap_bytes"]
-
-    @staticmethod
-    def _confidence_from_sd(sd_months: float) -> float:
-        """
-        Maps the external model's own reported uncertainty (SD in months) to
-        a 0-1 confidence score for display, anchored to the same +/-24mo
-        (~2 SD) threshold _classify_deviation already uses as "clinically
-        significant discrepancy" — an SD at that scale maps to ~0 confidence,
-        an SD near 0 maps to ~1. This is a display heuristic, not a validated
-        statistical confidence interval; sd_months itself is the honest number.
-        """
-        return round(max(0.05, min(0.99, 1 - sd_months / 24)), 3)
 
     def _external_run(
         self,
